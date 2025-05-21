@@ -1,13 +1,7 @@
 require('dotenv').config({ path: './variaveis.env' });
 const { Client } = require('whatsapp-web.js');
-const { OpenAI } = require('openai');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
-
-// Configuração OpenAI com versão 4.x+
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 
 // Inicializa o cliente do WhatsApp
