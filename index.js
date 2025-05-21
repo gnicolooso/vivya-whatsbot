@@ -2,6 +2,7 @@ require('dotenv').config({ path: './variaveis.env' });
 const { Client } = require('whatsapp-web.js');
 const { OpenAI } = require('openai');
 const qrcode = require('qrcode-terminal');
+const axios = require('axios');
 
 // Configuração OpenAI com versão 4.x+
 const openai = new OpenAI({
@@ -21,20 +22,25 @@ client.on('ready', () => {
   console.log('Cliente conectado!');
 });
 
-client.on('message', async (msg) => {
-  if (msg.body && !msg.isGroupMsg) {
-    try {
-      const response = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: msg.body }],
-        max_tokens: 150,
-      });
+client.on('message', async message => {
+  // Ignora mensagens de grupos, status e mensagens do próprio bot
+  if (message.fromMe || message.isStatus || message.isGroupMsg) return;
 
-      msg.reply(response.choices[0].message.content.trim());
-    } catch (error) {
-      console.error('Erro ao chamar OpenAI API:', error);
-      msg.reply('Desculpe, ocorreu um erro ao processar sua solicitação.');
+  try {
+    const response = await axios.post('https://vivya.app.n8n.cloud/webhook/56816120-1928-4e36-9e36-7dfdf5277260', {
+      from: message.from,
+      message: message.body
+    });
+
+    // Verifica se veio uma resposta no campo 'reply'
+    if (response.data && response.data.reply) {
+      await client.sendMessage(message.from, response.data.reply);
+    } else {
+      console.warn('Resposta do webhook não contém campo "reply"');
     }
+
+  } catch (error) {
+    console.error('Erro ao enviar mensagem ao webhook n8n:', error.message);
   }
 });
 
