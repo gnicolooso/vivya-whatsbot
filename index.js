@@ -12,10 +12,19 @@ const client = new Client({
 });
 
 
-client.on('qr', (qr) => {
+client.on('qr', async (qr) => {
   qrcode.generate(qr, { small: true });
   console.log('QR code gerado, escaneie com o WhatsApp para conectar.');
+
+  try {
+    await axios.post('https://qr-code-viewer-docker-production.up.railway.app/api/qr', { qr });
+    console.log('QR code enviado ao microserviço com sucesso.');
+  } catch (error) {
+    console.error('Erro ao enviar QR code ao microserviço:', error.message);
+  }
 });
+
+
 
 client.on('ready', () => {
   console.log('Cliente conectado!');
