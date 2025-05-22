@@ -107,7 +107,7 @@ app.post('/reset-session', async (req, res) => {
 
 console.log('🟡 Tentando iniciar servidor Express...');
 // Inicializa servidor na porta correta
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
