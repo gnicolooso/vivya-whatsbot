@@ -1,37 +1,37 @@
 require('dotenv').config({ path: './variaveis.env' });
-const { Client } = require('whatsapp-web.js');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 
-
-// Inicializa o cliente do WhatsApp
+// Inicializa o cliente com autenticação persistente
 const client = new Client({
+  authStrategy: new LocalAuth(), // Salva a sessão localmente
   puppeteer: {
+    headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   }
 });
 
-
+// Geração e envio do QR code
 client.on('qr', async (qr) => {
   qrcode.generate(qr, { small: true });
-  console.log('QR code gerado, escaneie com o WhatsApp para conectar.');
+  console.log('📱 QR code gerado. Escaneie com o WhatsApp.');
 
   try {
     await axios.post('https://qr-code-viewer-docker-production.up.railway.app/api/qr', { qr });
-    console.log('QR code enviado ao microserviço com sucesso.');
+    console.log('✅ QR code enviado ao microserviço.');
   } catch (error) {
-    console.error('Erro ao enviar QR code ao microserviço:', error.message);
+    console.error('❌ Falha ao enviar QR code:', error.message);
   }
 });
 
-
-
+// Quando o bot estiver pronto
 client.on('ready', () => {
-  console.log('Cliente conectado!');
+  console.log('✅ Cliente conectado ao WhatsApp!');
 });
 
+// Escuta mensagens recebidas
 client.on('message', async message => {
-  // Ignora mensagens de grupos, status e mensagens do próprio bot
   if (message.fromMe || message.isStatus || message.isGroupMsg) return;
 
   try {
@@ -40,16 +40,32 @@ client.on('message', async message => {
       message: message.body
     });
 
-    // Verifica se veio uma resposta no campo 'reply'
     if (response.data && response.data.reply) {
       await client.sendMessage(message.from, response.data.reply);
     } else {
-      console.warn('Resposta do webhook não contém campo "reply"');
+      console.warn('⚠️ Resposta do webhook não continha "reply".');
     }
 
   } catch (error) {
-    console.error('Erro ao enviar mensagem ao webhook n8n:', error.message);
+    console.error('❌ Erro no webhook:', error.message);
   }
 });
 
+// Trata falhas inesperadas do Puppeteer (ex: Execution context was destroyed)
+client.on('disconnected', (reason) => {
+  console.warn(`⚠️ Cliente desconectado: ${reason}`);
+  console.warn('Tentando reiniciar o cliente...');
+  client.initialize();
+});
+
+// Captura falhas globais
+process.on('unhandledRejection', (reason, p) => {
+  console.error('🚨 Erro não tratado:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('🚨 Exceção não capturada:', err);
+});
+
+// Inicia o cliente
 client.initialize();
