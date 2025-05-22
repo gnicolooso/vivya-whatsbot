@@ -3,6 +3,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 const express = require('express');
+const fs = require('fs');
 
 const app = express();
 app.use(express.json());
@@ -84,8 +85,18 @@ app.get('/', (req, res) => {
 // Endpoint para reset manual da sessão
 app.post('/reset-session', async (req, res) => {
   try {
-    console.log('🔄 Reset manual solicitado via API.');
-    await client.destroy();
+     if (client) {
+      console.log('🔄 Reset manual solicitado via API.');
+      await client.destroy();
+     }
+
+    // Remove cache da sessão anterior
+    const sessionPath = './.wwebjs_auth';
+    if (fs.existsSync(sessionPath)) {
+      fs.rmSync(sessionPath, { recursive: true, force: true });
+      console.log('🧹 Sessão antiga removida');
+    }
+
     startClient();
     res.status(200).send('Sessão reinicializada.');
   } catch (err) {
