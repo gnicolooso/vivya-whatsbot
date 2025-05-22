@@ -14,8 +14,9 @@
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "openai": "^4.98.0",
+    "puppeteer": "^24.9.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "^1.27.0"
+    "whatsapp-web.js": "^1.28.0"
   }
 }

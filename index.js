@@ -26,8 +26,19 @@ client.on('qr', async (qr) => {
 });
 
 // Quando o bot estiver pronto
-client.on('ready', () => {
+//client.on('ready', () => {
+//  console.log('✅ Cliente conectado ao WhatsApp!');
+//});
+// Notificar o microserviço quando conectar no WhatsApp
+client.on('ready', async () => {
   console.log('✅ Cliente conectado ao WhatsApp!');
+
+  try {
+    await axios.post('https://qr-code-viewer-docker-production.up.railway.app/api/connected');
+    console.log('✅ Status de conexão enviado ao microserviço.');
+  } catch (error) {
+    console.error('❌ Erro ao atualizar status de conexão no microserviço:', error.message);
+  }
 });
 
 // Escuta mensagens recebidas
