@@ -76,6 +76,11 @@ function startClient() {
 
 startClient();
 
+// Endpoint raiz
+app.get('/', (req, res) => {
+  res.send('🤖 Bot do WhatsApp está rodando!');
+});
+
 // Endpoint para reset manual da sessão
 app.post('/reset-session', async (req, res) => {
   try {
@@ -89,9 +94,12 @@ app.post('/reset-session', async (req, res) => {
   }
 });
 
-app.listen(3001, () => {
-  console.log('🛰️ API de reset disponível em http://localhost:3001/reset-session');
+// Inicializa servidor na porta correta
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
+
 
 // Captura falhas não tratadas
 process.on('unhandledRejection', (reason, p) => {
