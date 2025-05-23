@@ -1,26 +1,19 @@
-const express = require('express');
-const app = express();
-app.use(express.json());
-
-app.get('/', (req, res) => {
-  res.send('🤖 Servidor Express está funcionando!');
-});
-
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-});
-
-
-/*require('dotenv').config({ path: './variaveis.env' });
+require('dotenv').config({ path: './variaveis.env' });
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 const express = require('express');
 const fs = require('fs');
 const app = express();
+const path = require('path');
+const tmpDir = path.join(__dirname, 'tmp');
+if (!fs.existsSync(tmpDir)) {
+  fs.mkdirSync(tmpDir);
+}
+
 app.use(express.json());
 let client;
+app.use('/media', express.static(tmpDir));
 
 
 function startClient() {
@@ -55,6 +48,7 @@ function startClient() {
     }
   });
 
+/*
   client.on('message', async message => {
     if (message.fromMe || message.isStatus || message.isGroupMsg) return;
 
@@ -73,6 +67,50 @@ function startClient() {
       console.error('❌ Erro no webhook:', error.message);
     }
   });
+*/
+client.on('message', async message => {
+  if (message.fromMe || message.isStatus || message.isGroupMsg) return;
+
+  const mediaInfo = {
+    type: message.type,
+    body: message.body,
+    from: message.from,
+    timestamp: message.timestamp,
+    id: message.id.id
+  };
+
+  try {
+    // Se houver mídia
+    if (message.hasMedia) {
+      const media = await message.downloadMedia();
+      if (media && media.data) {
+        const extension = media.mimetype.split('/')[1];
+        const filename = `${Date.now()}-${mediaInfo.id}.${extension}`;
+        const filePath = path.join(tmpDir, filename);
+
+        // Salva mídia como arquivo
+        fs.writeFileSync(filePath, Buffer.from(media.data, 'base64'));
+
+        // URL pública para acesso ao arquivo
+        mediaInfo.media_url = `${process.env.PUBLIC_URL || 'https://vivya-whatsbot-production.up.railway.app'}/media/${filename}`;
+        mediaInfo.mimetype = media.mimetype;
+        mediaInfo.filename = filename;
+      }
+    }
+
+    const response = await axios.post('https://vivya.app.n8n.cloud/webhook/56816120-1928-4e36-9e36-7dfdf5277260', mediaInfo);
+
+    if (response.data && response.data.reply) {
+      await client.sendMessage(message.from, response.data.reply);
+    } else {
+      console.warn('⚠️ Resposta do webhook não continha "reply".');
+    }
+  } catch (error) {
+    console.error('❌ Erro ao processar mensagem:', error.message);
+  }
+});
+
+
 
   client.on('auth_failure', async () => {
     console.error('🔐 Falha de autenticação. Reinicializando sessão...');
@@ -138,4 +176,3 @@ process.on('unhandledRejection', (reason, p) => {
 process.on('uncaughtException', (err) => {
   console.error('🚨 Exceção não capturada:', err);
 });
-*/
