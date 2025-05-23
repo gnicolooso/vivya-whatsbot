@@ -2,7 +2,7 @@ require('dotenv').config({ path: './variaveis.env' });
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
-const express = require('express');
+const express = require('express'); // Importar express
 const fs = require('fs');  // Importar fs
 const path = require('path'); // Importar path
 const { v4: uuidv4 } = require('uuid'); // Importar uuidv4
