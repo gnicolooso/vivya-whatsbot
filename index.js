@@ -158,7 +158,10 @@ function startClient() {
             }
 
             // Envia o payload completo para o n8n
-            const response = await axios.post('https://vivya.app.n8n.cloud/webhook/56816120-1928-4e36-9e36-7dfdf5277260', payload);
+            // Produção
+            //const response = await axios.post('https://vivya.app.n8n.cloud/webhook/56816120-1928-4e36-9e36-7dfdf5277260', payload);
+            // Teste
+            const response = await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
 
             if (response.data && response.data.reply) {
                 await client.sendMessage(message.from, response.data.reply);
