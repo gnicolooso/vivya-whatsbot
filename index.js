@@ -1,16 +1,30 @@
-require('dotenv').config({ path: './variaveis.env' });
+const express = require('express');
+const app = express();
+app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.send('🤖 Servidor Express está funcionando!');
+});
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
+});
+
+
+/*require('dotenv').config({ path: './variaveis.env' });
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 const express = require('express');
 const fs = require('fs');
-
 const app = express();
 app.use(express.json());
-
 let client;
 
+
 function startClient() {
+  console.log('🟢 Inicializando cliente WhatsApp Web...');
   client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
@@ -93,10 +107,13 @@ app.post('/reset-session', async (req, res) => {
     // Remove cache da sessão anterior
     const sessionPath = './.wwebjs_auth';
     if (fs.existsSync(sessionPath)) {
-      fs.rmSync(sessionPath, { recursive: true, force: true });
-      console.log('🧹 Sessão antiga removida');
+      try {
+        fs.rmSync(sessionPath, { recursive: true, force: true });
+        console.log('🧹 Sessão antiga removida');
+      } catch (err) {
+        console.warn('⚠️ Falha ao remover pasta de sessão:', err.message);
+      }
     }
-
     startClient();
     res.status(200).send('Sessão reinicializada.');
   } catch (err) {
@@ -121,3 +138,4 @@ process.on('unhandledRejection', (reason, p) => {
 process.on('uncaughtException', (err) => {
   console.error('🚨 Exceção não capturada:', err);
 });
+*/
