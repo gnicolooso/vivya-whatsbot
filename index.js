@@ -223,6 +223,24 @@ app.post('/reset-session', async (req, res) => {
     }
 });
 
+app.post('/api/request-qr', async (req, res) => {
+    console.log('🔄 Solicitação de QR code recebida do microserviço.');
+    if (!client || !client.info) { // Se o cliente não estiver inicializado ou conectado
+        console.log('Bot não conectado ou inicializado. Forçando inicialização para gerar QR.');
+        // Chamar initialize() novamente, o que deve gerar um QR se não houver sessão válida
+        client.initialize(); 
+        res.status(200).send('Bot instruído a iniciar/gerar QR.');
+    } else if (client.info && client.info.status !== 'CONNECTED') { // Se estiver em algum estado diferente de conectado
+        console.log('Bot não está em estado conectado. Forçando inicialização para gerar QR.');
+        client.initialize();
+        res.status(200).send('Bot instruído a iniciar/gerar QR.');
+    }
+    else {
+        console.log('Bot já conectado, não é necessário gerar QR.');
+        res.status(200).send('Bot já conectado.');
+    }
+});
+
 console.log('🟡 Tentando iniciar servidor Express...');
 // Inicializa servidor na porta correta
 const PORT = process.env.PORT || 8080;
