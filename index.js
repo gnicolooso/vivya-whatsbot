@@ -7,6 +7,8 @@ const fs = require('fs');
 const app = express();
 const path = require('path');
 const tmpDir = path.join(__dirname, 'tmp');
+const { v4: uuidv4 } = require('uuid');
+
 if (!fs.existsSync(tmpDir)) {
   fs.mkdirSync(tmpDir);
 }
@@ -68,9 +70,6 @@ function startClient() {
     }
   });
 */
-const fs = require('fs');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
 
 client.on('message', async message => {
   if (message.fromMe || message.isStatus || message.isGroupMsg) return;
