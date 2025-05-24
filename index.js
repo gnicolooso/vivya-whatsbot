@@ -205,6 +205,9 @@ app.post('/reset-session', async (req, res) => {
             await client.destroy();
         }
 
+        // Envia uma resposta de sucesso IMEDIATAMENTE após a tentativa de destruição
+        res.status(200).json({ message: 'Sessão destruída com sucesso. Bot irá reiniciar e gerar novo QR.' });
+
         // Remove cache da sessão anterior
         const sessionPath = './.wwebjs_auth';
         if (fs.existsSync(sessionPath)) {
@@ -222,6 +225,7 @@ app.post('/reset-session', async (req, res) => {
         res.status(500).send('Erro ao resetar sessão.');
     }
 });
+
 
 app.post('/api/request-qr', async (req, res) => {
     console.log('🔄 Solicitação de QR code recebida do microserviço.');
