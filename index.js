@@ -6,8 +6,19 @@ const express = require('express'); // Importar express
 const fs = require('fs');  // Importar fs
 const path = require('path'); // Importar path
 const { v4: uuidv4 } = require('uuid'); // Importar uuidv4
+const cors = require('cors');
+
 
 const app = express();
+// --- Configuração CORS (ADICIONE OU MODIFIQUE ESTA SEÇÃO) ---
+app.use(cors({
+    origin: 'https://qr-code-viewer-docker-production.up.railway.app' // Permita especificamente o seu frontend
+    // Ou, para permitir qualquer origem (menos seguro em produção, mas útil para testes rápidos):
+    // origin: '*', 
+    // methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Métodos permitidos
+    // credentials: true, // Se você precisar de cookies/credenciais
+    // optionsSuccessStatus: 204 // Status para preflight OPTIONS
+}));
 app.use(express.json());
 
 let client;
