@@ -199,33 +199,56 @@ app.get('/', (req, res) => {
 
 // Endpoint para reset manual da sessão
 app.post('/reset-session', async (req, res) => {
+    console.log('🔄 Requisição de reset de sessão recebida no bot.');
     try {
-        if (client) {
-            console.log('🔄 Reset manual solicitado via API.');
+        const sessionPath = './.wwebjs_auth'; // Caminho da pasta de sessão
+
+        // 1. Tentar destruir o cliente WhatsApp Web JS se ele estiver ativo
+        if (client && client.pupBrowser) { // Verifica se o cliente está ativo e tem um navegador Puppeteer
+            console.log('🔌 Tentando destruir o cliente WhatsApp Web.');
             await client.destroy();
+            console.log('✅ Cliente WhatsApp Web destruído.');
+        } else {
+            console.log('ℹ️ Cliente WhatsApp Web não estava ativo para destruir.');
         }
 
-        // Envia uma resposta de sucesso IMEDIATAMENTE após a tentativa de destruição
-        res.status(200).json({ message: 'Sessão destruída com sucesso. Bot irá reiniciar e gerar novo QR.' });
-
-        // Remove cache da sessão anterior
-        const sessionPath = './.wwebjs_auth';
+        // 2. Remover cache da sessão anterior de forma robusta
         if (fs.existsSync(sessionPath)) {
             try {
+                console.log('🧹 Tentando remover pasta de sessão antiga:', sessionPath);
+                // Usar unlinkSync para arquivos e rmSync para diretórios
+                // Se .wwebjs_auth é uma pasta, rmSync é o correto.
                 fs.rmSync(sessionPath, { recursive: true, force: true });
-                console.log('🧹 Sessão antiga removida');
+                console.log('✅ Sessão antiga removida com sucesso.');
             } catch (err) {
                 console.warn('⚠️ Falha ao remover pasta de sessão:', err.message);
+                // Se a remoção falhar, ainda podemos tentar prosseguir, mas é um aviso.
             }
+        } else {
+            console.log('ℹ️ Nenhuma pasta de sessão antiga encontrada para remover.');
         }
-        startClient();
-        res.status(200).send('Sessão reinicializada.');
+
+        // 3. Enviar a resposta de sucesso e DEPOIS (opcionalmente) reiniciar o cliente.
+        // É CRÍTICO enviar a resposta AQUI e APENAS AQUI.
+        res.status(200).json({ message: 'Sessão do bot resetada e dados de sessão removidos. O bot tentará se reconectar.' });
+        console.log('✅ Resposta de reset enviada ao microserviço.');
+
+        // 4. Iniciar o cliente NOVAMENTE para forçar um novo QR Code.
+        // Envolver em um timeout para garantir que a resposta HTTP foi enviada
+        // e que o sistema teve um momento para processar a remoção do arquivo.
+        setTimeout(() => {
+            console.log('🚀 Iniciando novamente o cliente WhatsApp Web para gerar novo QR.');
+            startClient(); // Chama a função que inicializa o client
+        }, 1000); // Pequeno atraso para evitar conflitos imediatos
+
     } catch (err) {
-        console.error('❌ Erro ao resetar sessão manualmente:', err);
-        res.status(500).send('Erro ao resetar sessão.');
+        console.error('❌ Erro inesperado ao resetar sessão manualmente:', err);
+        // Em caso de erro na lógica de reset, envia uma resposta de erro
+        if (!res.headersSent) { // Verifica se a resposta já não foi enviada
+            res.status(500).json({ error: 'Erro interno ao tentar resetar sessão.', details: err.message });
+        }
     }
 });
-
 
 app.post('/api/request-qr', async (req, res) => {
     console.log('🔄 Solicitação de QR code recebida do microserviço.');
