@@ -173,18 +173,18 @@ function startClient() {
             // Produção
             //const response = await axios.post('https://vivya.app.n8n.cloud/webhook/56816120-1928-4e36-9e36-7dfdf5277260', payload);
             // Teste
-            //const response = await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
+            const response = await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
             // Envia mensagem e aguarda resposta
-            //if (response.data && response.data.reply) {
-            //    await client.sendMessage(message.from, response.data.reply);
-            //} else {
-            //    console.warn('⚠️ Resposta do webhook do n8n não continha "reply".');
-            //}
+            if (response.data && response.data.reply) {
+                await client.sendMessage(message.from, response.data.reply);
+            } else {
+                console.warn('⚠️ Resposta do webhook do n8n não continha "reply".');
+            }
 
             // Apenas "dispara e esquece" (fire and forget) a chamada para o n8n.
             // É importante que o n8n não retorne um erro HTTP aqui, apenas 200 OK.
-            await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
-            console.log('Payload enviado para n8n com sucesso. Esperando resposta do n8n via webhook.');
+            //await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
+            //console.log('Payload enviado para n8n com sucesso. Esperando resposta do n8n via webhook.');
 
 
         } catch (error) {
@@ -274,10 +274,10 @@ app.post('/api/request-qr', async (req, res) => {
 
 
 app.post('/api/send-whatsapp-message', async (req, res) => {
-    const { to, message } = req.body;
+    const { to, message, mediaType, mediaUrl, caption, filename } = req.body;
 
-    if (!to || !message) {
-        return res.status(400).json({ error: 'Parâmetros "to" e "message" são obrigatórios.' });
+    if (!to) {
+        return res.status(400).json({ error: 'Parâmetro "to" é obrigatório.' });
     }
 
     if (!client || !client.info) {
@@ -286,14 +286,65 @@ app.post('/api/send-whatsapp-message', async (req, res) => {
     }
 
     try {
-        await client.sendMessage(to, message);
-        console.log(`✅ Mensagem enviada para ${to}`);
+        if (mediaType && mediaUrl) {
+            // Se há mídia, tenta enviar a mídia
+            const media = await MessageMedia.fromUrl(mediaUrl);
+            let options = {};
+
+            if (caption) {
+                options.caption = caption;
+            }
+            if (filename) {
+                options.filename = filename;
+            }
+
+            switch (mediaType) {
+                case 'image':
+                    // Para imagens
+                    await client.sendMessage(to, media, options);
+                    console.log(`✅ Imagem enviada para ${to} da URL: ${mediaUrl}`);
+                    break;
+                case 'video':
+                    // Para vídeos
+                    await client.sendMessage(to, media, options);
+                    console.log(`✅ Vídeo enviado para ${to} da URL: ${mediaUrl}`);
+                    break;
+                case 'audio':
+                case 'ptt': // Tratar 'audio' e 'ptt' da mesma forma, enviando como voz
+                    // Para áudio (enviado como PTT/voz)
+                    options.sendAudioAsVoice = true; // ISSO FAZ O ÁUDIO SER ENVIADO COMO VOZ/PTT
+                    await client.sendMessage(to, media, options);
+                    console.log(`✅ Áudio (PTT) enviado para ${to} da URL: ${mediaUrl}`);
+                    break;
+                case 'document':
+                    // Para documentos
+                    await client.sendMessage(to, media, options);
+                    console.log(`✅ Documento enviado para ${to} da URL: ${mediaUrl}`);
+                    break;
+                default:
+                    console.warn(`⚠️ Tipo de mídia desconhecido: ${mediaType}. Tentando enviar como mensagem de texto.`);
+                    if (message) {
+                        await client.sendMessage(to, message);
+                        console.log(`✅ Mensagem de texto enviada para ${to}: ${message}`);
+                    } else {
+                        return res.status(400).json({ error: 'Tipo de mídia não suportado e nenhuma mensagem de texto fornecida.' });
+                    }
+            }
+        } else if (message) {
+            // Se não há mídia, envia a mensagem de texto
+            await client.sendMessage(to, message);
+            console.log(`✅ Mensagem de texto enviada para ${to}: ${message}`);
+        } else {
+            return res.status(400).json({ error: 'Nenhuma mensagem de texto ou mídia fornecida para enviar.' });
+        }
+
         res.status(200).json({ success: true, message: 'Mensagem enviada com sucesso.' });
     } catch (error) {
         console.error(`❌ Erro ao enviar mensagem para ${to}:`, error.message);
         res.status(500).json({ success: false, error: 'Falha ao enviar mensagem.', details: error.message });
     }
 });
+
 
 
 console.log('🟡 Tentando iniciar servidor Express...');
