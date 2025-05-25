@@ -83,7 +83,7 @@ function startClient() {
                 display_phone_number: botInfo.pushname || botInfo.wid.user, // Nome do perfil do bot ou ID
 
                 // Informações do remetente
-                from: message.from, // Número de telefone do remetente (ex: 554791234567@c.us)
+                from: message.from.split('@')[0], // Número de telefone do remetente. Remove o "@c.us" do final
                 contacts: {
                     profile: {
                         name: contact.pushname || contact.name // Nome do contato no WhatsApp
@@ -109,7 +109,7 @@ function startClient() {
                 const media = await message.downloadMedia();
 
                 if (media) {
-                    const extension = media.mimetype.split('/')[1] || 'bin';
+                    const extension = media.mimetype.split('/')[1].split(';')[0] || 'bin';
                     const filename = `${Date.now()}-${uuidv4()}.${extension}`; // Nome único do arquivo
                     const fullPath = path.join(mediaDir, filename); // Usa o diretório de mídia global
 
@@ -173,13 +173,19 @@ function startClient() {
             // Produção
             //const response = await axios.post('https://vivya.app.n8n.cloud/webhook/56816120-1928-4e36-9e36-7dfdf5277260', payload);
             // Teste
-            const response = await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
+            //const response = await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
+            // Envia mensagem e aguarda resposta
+            //if (response.data && response.data.reply) {
+            //    await client.sendMessage(message.from, response.data.reply);
+            //} else {
+            //    console.warn('⚠️ Resposta do webhook do n8n não continha "reply".');
+            //}
 
-            if (response.data && response.data.reply) {
-                await client.sendMessage(message.from, response.data.reply);
-            } else {
-                console.warn('⚠️ Resposta do webhook do n8n não continha "reply".');
-            }
+            // Apenas "dispara e esquece" (fire and forget) a chamada para o n8n.
+            // É importante que o n8n não retorne um erro HTTP aqui, apenas 200 OK.
+            await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
+            console.log('Payload enviado para n8n com sucesso. Esperando resposta do n8n via webhook.');
+
 
         } catch (error) {
             console.error('❌ Erro no webhook ou no processamento da mensagem:', error.message);
@@ -265,6 +271,30 @@ app.post('/api/request-qr', async (req, res) => {
         res.status(200).send('Bot já conectado.');
     }
 });
+
+
+app.post('/api/send-whatsapp-message', async (req, res) => {
+    const { to, message } = req.body;
+
+    if (!to || !message) {
+        return res.status(400).json({ error: 'Parâmetros "to" e "message" são obrigatórios.' });
+    }
+
+    if (!client || !client.info) {
+        console.error('❌ Cliente WhatsApp não está pronto ou conectado para enviar mensagem.');
+        return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp.' });
+    }
+
+    try {
+        await client.sendMessage(to, message);
+        console.log(`✅ Mensagem enviada para ${to}`);
+        res.status(200).json({ success: true, message: 'Mensagem enviada com sucesso.' });
+    } catch (error) {
+        console.error(`❌ Erro ao enviar mensagem para ${to}:`, error.message);
+        res.status(500).json({ success: false, error: 'Falha ao enviar mensagem.', details: error.message });
+    }
+});
+
 
 console.log('🟡 Tentando iniciar servidor Express...');
 // Inicializa servidor na porta correta
