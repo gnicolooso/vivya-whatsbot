@@ -173,18 +173,27 @@ function startClient() {
             // Produção
             //const response = await axios.post('https://vivya.app.n8n.cloud/webhook/56816120-1928-4e36-9e36-7dfdf5277260', payload);
             // Teste
-            const response = await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
+            //const response = await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
             // Envia mensagem e aguarda resposta
-            if (response.data && response.data.reply) {
-                await client.sendMessage(message.from, response.data.reply);
-            } else {
-                console.warn('⚠️ Resposta do webhook do n8n não continha "reply".');
-            }
+            //if (response.data && response.data.reply) {
+            //    await client.sendMessage(message.from, response.data.reply);
+            //} else {
+            //    console.warn('⚠️ Resposta do webhook do n8n não continha "reply".');
+            //}
 
             // Apenas "dispara e esquece" (fire and forget) a chamada para o n8n.
             // É importante que o n8n não retorne um erro HTTP aqui, apenas 200 OK.
             //await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
             //console.log('Payload enviado para n8n com sucesso. Esperando resposta do n8n via webhook.');
+
+
+            try {
+                console.log('DEBUG: Tentando enviar payload para n8n...');
+                await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
+                console.log('DEBUG: Payload enviado para n8n com sucesso.');
+            } catch (error) {
+                console.error('DEBUG: Erro ao enviar payload para n8n:', error.message);
+            }
 
 
         } catch (error) {
