@@ -77,6 +77,7 @@ function startClient() {
             const botInfo = client.info; // Informações do cliente/bot
 
             // Inicializa o payload com informações comuns
+            console.log('DEBUG: Inicializa o payload...');
             const payload = {
                 // Informações do bot (simulando algumas variáveis da API do WhatsApp Business)
                 phone_number_id: botInfo.wid.user, // O ID do número do bot
@@ -279,6 +280,74 @@ app.post('/api/request-qr', async (req, res) => {
         console.log('Bot já conectado, não é necessário gerar QR.');
         res.status(200).send('Bot já conectado.');
     }
+});
+
+
+// endpoint para iniciar o estado de "digitando"
+app.post('/api/set-typing-state', async (req, res) => {
+    const { to } = req.body; // 'to' é o número do remetente (message.from do payload original)
+
+    if (!to) {
+        return res.status(400).json({ error: 'Parâmetro "to" é obrigatório para definir o estado de digitação.' });
+    }
+    if (!client || !client.info) {
+        console.warn('⚠️ Tentativa de definir estado de digitação, mas o bot não está conectado.');
+        return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp.' });
+    }
+
+    try {
+        await client.sendStateTyping(to);
+        console.log(`💬 Definido estado 'digitando' para: ${to}`);
+        res.status(200).json({ success: true, message: 'Estado de digitação definido.' });
+    } catch (error) {
+        console.error(`❌ Erro ao definir estado 'digitando' para ${to}:`, error.message);
+        res.status(500).json({ success: false, error: 'Falha ao definir estado de digitação.', details: error.message });
+    }
+});
+
+// endpoint para iniciar o estado de "gravando"
+app.post('/api/set-recording-state', async (req, res) => {
+    const { to } = req.body; // 'to' é o número do remetente
+
+    if (!to) {
+        return res.status(400).json({ error: 'Parâmetro "to" é obrigatório para definir o estado de gravação.' });
+    }
+    if (!client || !client.info) {
+        console.warn('⚠️ Tentativa de definir estado de gravação, mas o bot não está conectado.');
+        return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp.' });
+    }
+
+    try {
+        await client.sendStateRecording(to);
+        console.log(`🎤 Definido estado 'gravando' para: ${to}`);
+        res.status(200).json({ success: true, message: 'Estado de gravação definido.' });
+    } catch (error) {
+        console.error(`❌ Erro ao definir estado 'gravando' para ${to}:`, error.message);
+        res.status(500).json({ success: false, error: 'Falha ao definir estado de gravação.', details: error.message });
+    }
+});
+
+// endpoint para limpar o estado de "digitando" ou "gravando"
+app.post('/api/clear-chat-state', async (req, res) => {
+    const { to } = req.body; // 'to' é o número do remetente
+
+    if (!to) {
+        return res.status(400).json({ error: 'Parâmetro "to" é obrigatório para limpar o estado do chat.' });
+    }
+    if (!client || !client.info) {
+        console.warn('⚠️ Tentativa de limpar estado do chat, mas o bot não está conectado.');
+        // Considerar retornar sucesso aqui para não bloquear o n8n se o bot estiver offline
+        return res.status(200).json({ success: true, message: 'Bot não conectado, estado não limpo (mas não é um erro crítico).' });
+    }
+
+    try {
+        await client.clearState(to);
+        console.log(`❌ Estado de chat limpo para: ${to}`);
+        res.status(200).json({ success: true, message: 'Estado de chat limpo.' });
+    } catch (error) {
+        console.error(`❌ Erro ao limpar estado de chat para ${to}:`, error.message);
+        res.status(500).json({ success: false, error: 'Falha ao limpar estado de chat.', details: error.message });
+    }
 });
 
 
