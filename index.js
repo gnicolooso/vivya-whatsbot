@@ -296,14 +296,21 @@ app.post('/api/set-typing-state', async (req, res) => {
     }
 
     try {
-        await client.sendStateTyping(to);
-        console.log(`💬 Definido estado 'digitando' para: ${to}`);
-        res.status(200).json({ success: true, message: 'Estado de digitação definido.' });
+        const chat = await client.getChatById(to); // Obtém o objeto Chat
+        if (chat) {
+            await chat.sendStateTyping(); // Chama o método no objeto Chat
+            console.log(`💬 Definido estado 'digitando' para: ${to}`);
+            res.status(200).json({ success: true, message: 'Estado de digitação definido.' });
+        } else {
+            console.warn(`⚠️ Chat não encontrado para o ID: ${to}. Não foi possível definir o estado de digitação.`);
+            res.status(404).json({ success: false, error: 'Chat não encontrado.' });
+        }
     } catch (error) {
         console.error(`❌ Erro ao definir estado 'digitando' para ${to}:`, error.message);
         res.status(500).json({ success: false, error: 'Falha ao definir estado de digitação.', details: error.message });
     }
 });
+
 
 // endpoint para iniciar o estado de "gravando"
 app.post('/api/set-recording-state', async (req, res) => {
@@ -318,16 +325,23 @@ app.post('/api/set-recording-state', async (req, res) => {
     }
 
     try {
-        await client.sendStateRecording(to);
-        console.log(`🎤 Definido estado 'gravando' para: ${to}`);
-        res.status(200).json({ success: true, message: 'Estado de gravação definido.' });
+        const chat = await client.getChatById(to); // Obtém o objeto Chat
+        if (chat) {
+            await chat.sendStateRecording(); // Chama o método no objeto Chat
+            console.log(`🎤 Definido estado 'gravando' para: ${to}`);
+            res.status(200).json({ success: true, message: 'Estado de gravação definido.' });
+        } else {
+            console.warn(`⚠️ Chat não encontrado para o ID: ${to}. Não foi possível definir o estado de gravação.`);
+            res.status(404).json({ success: false, error: 'Chat não encontrado.' });
+        }
     } catch (error) {
         console.error(`❌ Erro ao definir estado 'gravando' para ${to}:`, error.message);
         res.status(500).json({ success: false, error: 'Falha ao definir estado de gravação.', details: error.message });
     }
 });
+   
 
-// endpoint para limpar o estado de "digitando" ou "gravando"
+// Novo endpoint para limpar o estado de "digitando" ou "gravando"
 app.post('/api/clear-chat-state', async (req, res) => {
     const { to } = req.body; // 'to' é o número do remetente
 
@@ -341,14 +355,21 @@ app.post('/api/clear-chat-state', async (req, res) => {
     }
 
     try {
-        await client.clearState(to);
-        console.log(`❌ Estado de chat limpo para: ${to}`);
-        res.status(200).json({ success: true, message: 'Estado de chat limpo.' });
+        const chat = await client.getChatById(to); // Obtém o objeto Chat
+        if (chat) {
+            await chat.clearState(); // Chama o método no objeto Chat
+            console.log(`❌ Estado de chat limpo para: ${to}`);
+            res.status(200).json({ success: true, message: 'Estado de chat limpo.' });
+        } else {
+            console.warn(`⚠️ Chat não encontrado para o ID: ${to}. Não foi possível limpar o estado do chat.`);
+            res.status(404).json({ success: false, error: 'Chat não encontrado.' });
+        }
     } catch (error) {
         console.error(`❌ Erro ao limpar estado de chat para ${to}:`, error.message);
         res.status(500).json({ success: false, error: 'Falha ao limpar estado de chat.', details: error.message });
     }
 });
+
 
 
 app.post('/api/send-whatsapp-message', async (req, res) => {
