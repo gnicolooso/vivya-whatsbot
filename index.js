@@ -39,7 +39,7 @@ console.log(`📂 Servindo arquivos estáticos de: ${mediaDir}`);
 function startClient() {
     console.log('🟢 Inicializando cliente WhatsApp Web...');
     client = new Client({
-        authStrategy: new LocalAuth({ clientId: currentClientId }), // Usa o clientId dinâmico aqui
+        authStrategy: new LocalAuth({ clientId: currentClientId, dataPath: '/app' }), // dataPath: '/app' <-- ISSO É CRUCIAL! Salva as sessões dentro de /app/.wwebjs_auth
         puppeteer: {
             headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox']
