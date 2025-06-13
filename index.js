@@ -7,9 +7,11 @@ const fs = require('fs');  // Importar fs
 const path = require('path'); // Importar path
 const { v4: uuidv4 } = require('uuid'); // Importar uuidv4
 const cors = require('cors');
-
-
 const app = express();
+const SESSION_DIR = '/app/.wwebjs_auth';
+const CLIENT_SESSION_DIR = path.join(SESSION_DIR, 'session-bot-principal'); // Adapte 'bot-principal' ao seu clientId
+
+/
 // --- Configuração CORS (ADICIONE OU MODIFIQUE ESTA SEÇÃO) ---
 app.use(cors({
     origin: 'https://qr-code-viewer-docker-production.up.railway.app' // Permita especificamente o seu frontend
@@ -22,7 +24,7 @@ app.use(cors({
 app.use(express.json());
 
 let client;
-let currentClientId = "bot-principal"; // Variável para controlar o ID do cliente
+let currentClientId = "session-bot-principal"; // Variável para controlar o ID do cliente
 
 // --- Configuração para servir arquivos estáticos (MUITO IMPORTANTE!) ---
 // Isso permite que as URLs como process.env.PUBLIC_URL/media/{filename} funcionem.
@@ -35,6 +37,43 @@ if (!fs.existsSync(mediaDir)) {
 console.log(`📂 Servindo arquivos estáticos de: ${mediaDir}`);
 // --- Fim da configuração de arquivos estáticos ---
 
+// Função para garantir que os diretórios existam
+function ensureSessionDirectoriesExist() {
+  try {
+    if (!fs.existsSync(SESSION_DIR)) {
+      console.log(`[INIT] Criando diretório de sessão: ${SESSION_DIR}`);
+      fs.mkdirSync(SESSION_DIR, { recursive: true });
+      console.log(`[INIT] Diretório ${SESSION_DIR} criado.`);
+    } else {
+      console.log(`[INIT] Diretório de sessão ${SESSION_DIR} já existe.`);
+    }
+
+    if (!fs.existsSync(CLIENT_SESSION_DIR)) {
+      console.log(`[INIT] Criando diretório específico do cliente: ${CLIENT_SESSION_DIR}`);
+      fs.mkdirSync(CLIENT_SESSION_DIR, { recursive: true });
+      console.log(`[INIT] Diretório ${CLIENT_SESSION_DIR} criado.`);
+    } else {
+      console.log(`[INIT] Diretório específico do cliente ${CLIENT_SESSION_DIR} já existe.`);
+    }
+
+    // Opcional: Para depuração, tente listar o conteúdo via Node.js
+    console.log(`[INIT] Conteúdo de ${SESSION_DIR}:`);
+    fs.readdirSync(SESSION_DIR).forEach(file => {
+        console.log(`  - ${file}`);
+    });
+    console.log(`[INIT] Conteúdo de ${CLIENT_SESSION_DIR}:`);
+    fs.readdirSync(CLIENT_SESSION_DIR).forEach(file => {
+        console.log(`  - ${file}`);
+    });
+
+  } catch (error) {
+    console.error(`❌ [INIT] Erro ao garantir diretórios de sessão: ${error.message}`);
+    // Se houver um erro grave aqui, talvez o app não consiga funcionar
+    process.exit(1); // Interrompe o processo se não conseguir criar os diretórios
+  }
+}
+
+ensureSessionDirectoriesExist();
 
 function startClient() {
     console.log('🟢 Inicializando cliente WhatsApp Web...');
