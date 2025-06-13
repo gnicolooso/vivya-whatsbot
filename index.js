@@ -11,7 +11,6 @@ const app = express();
 const SESSION_DIR = '/app/.wwebjs_auth';
 const CLIENT_SESSION_DIR = path.join(SESSION_DIR, 'session-bot-principal'); // Adapte 'bot-principal' ao seu clientId
 
-/
 // --- Configuração CORS (ADICIONE OU MODIFIQUE ESTA SEÇÃO) ---
 app.use(cors({
     origin: 'https://qr-code-viewer-docker-production.up.railway.app' // Permita especificamente o seu frontend
