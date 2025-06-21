@@ -1,342 +1,395 @@
+// Carrega variáveis de ambiente do .env
 require('dotenv').config({ path: './variaveis.env' });
+
+// Importações de bibliotecas
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
-const express = require('express'); // Importar express
-const fs = require('fs');  // Importar fs
-const path = require('path'); // Importar path
-const { v4: uuidv4 } = require('uuid'); // Importar uuidv4
-const cors = require('cors');
-const app = express();
-const SESSION_DIR = '/app/.wwebjs_auth';
-const CLIENT_SESSION_DIR = path.join(SESSION_DIR, 'session-bot-principal'); // Adapte 'bot-principal' ao seu clientId
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const { v4: uuidv4 } = require('uuid'); // Para gerar nomes de arquivos únicos
+const cors = require('cors'); // Para lidar com requisições de diferentes origens
 
-// --- Configuração CORS (ADICIONE OU MODIFIQUE ESTA SEÇÃO) ---
+const app = express();
+
+// --- Variáveis de Configuração e Constantes ---
+// Diretório onde as sessões do whatsapp-web.js serão salvas.
+// Montado como volume no Railway: /app/.wwebjs_auth
+const SESSION_DIR = '/app/.wwebjs_auth';
+// ID fixo para a sessão do bot. É CRUCIAL que este ID não mude entre deploys para persistência.
+const CLIENT_ID = "session-bot-principal";
+// Caminho completo para o diretório de sessão específico deste cliente.
+const CLIENT_SESSION_DIR = path.join(SESSION_DIR, `session-${CLIENT_ID}`);
+
+// URL do microserviço de QR Code (ajuste conforme seu deploy do microserviço)
+const QR_SERVICE_URL = process.env.QR_SERVICE_URL || 'https://qr-code-viewer-docker-production.up.railway.app';
+// URL do webhook do n8n para processar mensagens (ajuste conforme seu webhook)
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260';
+// URL pública do seu bot (usada para servir mídia)
+const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:8080';
+
+// --- Configuração CORS (ADICIONADA/MODIFICADA PARA SEGURANÇA E TESTES) ---
 app.use(cors({
-    origin: 'https://qr-code-viewer-docker-production.up.railway.app' // Permita especificamente o seu frontend
-    // Ou, para permitir qualquer origem (menos seguro em produção, mas útil para testes rápidos):
-    // origin: '*', 
-    // methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Métodos permitidos
-    // credentials: true, // Se você precisar de cookies/credenciais
-    // optionsSuccessStatus: 204 // Status para preflight OPTIONS
+    origin: QR_SERVICE_URL, // Permita especificamente o seu frontend do microserviço
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Métodos permitidos
+    credentials: true, // Se o frontend precisar de cookies/credenciais (geralmente não para este caso)
+    optionsSuccessStatus: 204 // Status para preflight OPTIONS
 }));
 app.use(express.json());
-
-let client;
-let currentClientId = "session-bot-principal"; // Variável para controlar o ID do cliente
 
 // --- Configuração para servir arquivos estáticos (MUITO IMPORTANTE!) ---
 // Isso permite que as URLs como process.env.PUBLIC_URL/media/{filename} funcionem.
 const mediaDir = path.join(__dirname, 'tmp', 'media');
 app.use('/media', express.static(mediaDir));
+
 // Garante que o diretório de mídia existe na inicialização do servidor
 if (!fs.existsSync(mediaDir)) {
-    fs.mkdirSync(mediaDir, { recursive: true });
+    fs.mkdirSync(mediaDir, { recursive: true });
 }
 console.log(`📂 Servindo arquivos estáticos de: ${mediaDir}`);
 // --- Fim da configuração de arquivos estáticos ---
 
+let client; // Variável global para o cliente WhatsApp
+let isBotInitializing = false; // Flag para evitar inicializações múltiplas
+
 // Função para garantir que os diretórios existam
 function ensureSessionDirectoriesExist() {
-  try {
-    if (!fs.existsSync(SESSION_DIR)) {
-      console.log(`[INIT] Criando diretório de sessão: ${SESSION_DIR}`);
-      fs.mkdirSync(SESSION_DIR, { recursive: true });
-      console.log(`[INIT] Diretório ${SESSION_DIR} criado.`);
-    } else {
-      console.log(`[INIT] Diretório de sessão ${SESSION_DIR} já existe.`);
+    try {
+        if (!fs.existsSync(SESSION_DIR)) {
+            console.log(`[INIT] Criando diretório de sessão: ${SESSION_DIR}`);
+            fs.mkdirSync(SESSION_DIR, { recursive: true });
+            console.log(`[INIT] Diretório ${SESSION_DIR} criado.`);
+        } else {
+            console.log(`[INIT] Diretório de sessão ${SESSION_DIR} já existe.`);
+        }
+
+        if (!fs.existsSync(CLIENT_SESSION_DIR)) {
+            console.log(`[INIT] Criando diretório específico do cliente: ${CLIENT_SESSION_DIR}`);
+            fs.mkdirSync(CLIENT_SESSION_DIR, { recursive: true });
+            console.log(`[INIT] Diretório ${CLIENT_SESSION_DIR} criado.`);
+        } else {
+            console.log(`[INIT] Diretório específico do cliente ${CLIENT_SESSION_DIR} já existe.`);
+        }
+
+        // --- INÍCIO: Limpeza de Pastas de Sessão Antigas e Inconsistentes ---
+        // Isso é crucial para evitar que o LocalAuth se confunda com múltiplas sessões.
+        // Itera sobre o diretório raiz da sessão e remove pastas que não sejam a do CLIENT_ID fixo.
+        fs.readdirSync(SESSION_DIR).forEach(file => {
+            const fullPath = path.join(SESSION_DIR, file);
+            if (file.startsWith('session-') && file !== `session-${CLIENT_ID}`) {
+                console.warn(`⚠️ [INIT] Removendo pasta de sessão antiga/inconsistente: ${fullPath}`);
+                fs.rmSync(fullPath, { recursive: true, force: true });
+            }
+            // O diretório 'session' sem clientId também pode ser um resquício.
+            if (file === 'session' && fs.statSync(fullPath).isDirectory()) {
+                console.warn(`⚠️ [INIT] Removendo diretório 'session' genérico: ${fullPath}`);
+                fs.rmSync(fullPath, { recursive: true, force: true });
+            }
+        });
+        // --- FIM: Limpeza de Pastas de Sessão Antigas e Inconsistentes ---
+
+        // Opcional: Para depuração, tente listar o conteúdo via Node.js
+        console.log(`[INIT] Conteúdo atual de ${SESSION_DIR}:`);
+        fs.readdirSync(SESSION_DIR).forEach(file => {
+            console.log(`  - ${file}`);
+        });
+        console.log(`[INIT] Conteúdo atual de ${CLIENT_SESSION_DIR}:`);
+        fs.readdirSync(CLIENT_SESSION_DIR).forEach(file => {
+            console.log(`  - ${file}`);
+        });
+
+    } catch (error) {
+        console.error(`❌ [INIT] Erro ao garantir diretórios de sessão: ${error.message}`);
+        process.exit(1); // Interrompe o processo se não conseguir criar os diretórios
     }
-
-    if (!fs.existsSync(CLIENT_SESSION_DIR)) {
-      console.log(`[INIT] Criando diretório específico do cliente: ${CLIENT_SESSION_DIR}`);
-      fs.mkdirSync(CLIENT_SESSION_DIR, { recursive: true });
-      console.log(`[INIT] Diretório ${CLIENT_SESSION_DIR} criado.`);
-    } else {
-      console.log(`[INIT] Diretório específico do cliente ${CLIENT_SESSION_DIR} já existe.`);
-    }
-
-    // Opcional: Para depuração, tente listar o conteúdo via Node.js
-    console.log(`[INIT] Conteúdo de ${SESSION_DIR}:`);
-    fs.readdirSync(SESSION_DIR).forEach(file => {
-        console.log(`  - ${file}`);
-    });
-    console.log(`[INIT] Conteúdo de ${CLIENT_SESSION_DIR}:`);
-    fs.readdirSync(CLIENT_SESSION_DIR).forEach(file => {
-        console.log(`  - ${file}`);
-    });
-
-  } catch (error) {
-    console.error(`❌ [INIT] Erro ao garantir diretórios de sessão: ${error.message}`);
-    // Se houver um erro grave aqui, talvez o app não consiga funcionar
-    process.exit(1); // Interrompe o processo se não conseguir criar os diretórios
-  }
 }
 
+// Garante que os diretórios de sessão existam e limpa sessões antigas ANTES de iniciar o cliente.
 ensureSessionDirectoriesExist();
 
+/**
+ * Inicializa o cliente WhatsApp Web JS.
+ * Esta função deve ser chamada apenas uma vez ou após um `client.destroy()`.
+ */
 function startClient() {
-    console.log('🟢 Inicializando cliente WhatsApp Web...');
-    client = new Client({
-        authStrategy: new LocalAuth({ clientId: currentClientId, dataPath: '/app' }), // dataPath: '/app' <-- ISSO É CRUCIAL! Salva as sessões dentro de /app/.wwebjs_auth
-        puppeteer: {
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        }
-    });
+    // Evita inicializações múltiplas se já estiver inicializando
+    if (isBotInitializing) {
+        console.log('🟡 Bot já está em processo de inicialização. Ignorando nova chamada.');
+        return;
+    }
+    isBotInitializing = true;
 
-    client.on('qr', async (qr) => {
-        qrcode.generate(qr, { small: true });
-        console.log('📱 QR code gerado. Escaneie com o WhatsApp.');
+    console.log('🟢 Inicializando cliente WhatsApp Web...');
+    client = new Client({
+        // Usa LocalAuth com o CLIENT_ID fixo e o dataPath apontando para a raiz do volume
+        authStrategy: new LocalAuth({ clientId: CLIENT_ID, dataPath: SESSION_DIR }),
+        puppeteer: {
+            headless: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage', // Útil em ambientes Docker com memória limitada
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process' // Útil para economia de recursos
+            ],
+            // userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36'
+            // Opcional: Especificar o caminho do userDataDir explicitamente pode ajudar
+            // Isso força o Puppeteer a usar a pasta exata do CLIENT_SESSION_DIR
+            userDataDir: CLIENT_SESSION_DIR
+        }
+    });
 
-        try {
-            await axios.post('https://qr-code-viewer-docker-production.up.railway.app/api/qr', { qr });
-            console.log('✅ QR code enviado ao microserviço.');
-        } catch (error) {
-            console.error('❌ Falha ao enviar QR code:', error.message);
-        }
-    });
+    client.on('qr', async (qr) => {
+        qrcode.generate(qr, { small: true });
+        console.log('📱 QR code gerado. Escaneie com o WhatsApp.');
 
-    client.on('ready', async () => {
-        console.log('✅ Cliente conectado ao WhatsApp!');
-        try {
-            await axios.post('https://qr-code-viewer-docker-production.up.railway.app/api/connected');
-            console.log('✅ Status de conexão enviado ao microserviço.');
-        } catch (error) {
-            console.error('❌ Erro ao atualizar status de conexão no microserviço:', error.message);
-        }
-    });
+        try {
+            await axios.post(`${QR_SERVICE_URL}/api/qr`, { qr });
+            console.log('✅ QR code enviado ao microserviço.');
+        } catch (error) {
+            console.error('❌ Falha ao enviar QR code ao microserviço:', error.message);
+        }
+    });
 
-    client.on('message', async message => {
-        if (message.fromMe || message.isStatus || message.isGroupMsg) return;
+    client.on('ready', async () => {
+        console.log('✅ Cliente conectado ao WhatsApp!');
+        isBotInitializing = false; // Resetar flag após conexão bem-sucedida
+        try {
+            await axios.post(`${QR_SERVICE_URL}/api/connected`);
+            console.log('✅ Status de conexão enviado ao microserviço.');
+        } catch (error) {
+            console.error('❌ Erro ao atualizar status de conexão no microserviço:', error.message);
+        }
+    });
 
-        try {
-            const chat = await message.getChat();
-            const contact = await message.getContact();
-            const botInfo = client.info; // Informações do cliente/bot
+    client.on('message', async message => {
+        if (message.fromMe || message.isStatus || message.isGroupMsg) return;
 
-            // Inicializa o payload com informações comuns
+        try {
+            const chat = await message.getChat();
+            const contact = await message.getContact();
+            const botInfo = client.info; // Informações do cliente/bot
+
+            // Inicializa o payload com informações comuns
             console.log('DEBUG: Inicializa o payload...');
-            const payload = {
-                // Informações do bot (simulando algumas variáveis da API do WhatsApp Business)
-                phone_number_id: botInfo.wid.user, // O ID do número do bot
-                display_phone_number: botInfo.pushname || botInfo.wid.user, // Nome do perfil do bot ou ID
+            const payload = {
+                // Informações do bot (simulando algumas variáveis da API do WhatsApp Business)
+                phone_number_id: botInfo.wid.user, // O ID do número do bot
+                display_phone_number: botInfo.pushname || botInfo.wid.user, // Nome do perfil do bot ou ID
 
-                // Informações do remetente
+                // Informações do remetente
                 from: message.from.split('@')[0], // Número de telefone do remetente. Remove o "@c.us" do final
-                contacts: {
-                    profile: {
-                        name: contact.pushname || contact.name // Nome do contato no WhatsApp
-                    }
-                },
-                is_group: chat.isGroup,
+                contacts: {
+                    profile: {
+                        name: contact.pushname || contact.name // Nome do contato no WhatsApp
+                    }
+                },
+                is_group: chat.isGroup,
 
-                // Informações da mensagem
-                message_id: message.id.id, // ID único da mensagem
-                timestamp: message.timestamp, // Carimbo de data/hora da mensagem
-                message_type: message.type, // Tipo da mensagem (text, image, video, audio, document, sticker, location, etc.)
+                // Informações da mensagem
+                message_id: message.id.id, // ID único da mensagem
+                timestamp: message.timestamp, // Carimbo de data/hora da mensagem
+                message_type: message.type, // Tipo da mensagem (text, image, video, audio, document, sticker, location, etc.)
 
-                // Objetos para conteúdo específico, inicializados vazios
-                text: {},
-                audio: {},
-                video: {},
-                image: {},
-                document: {},
-            };
+                // Objetos para conteúdo específico, inicializados vazios
+                text: {},
+                audio: {},
+                video: {},
+                image: {},
+                document: {},
+            };
 
-            // Processamento da mídia
-            if (message.hasMedia) { // Use message.hasMedia em vez de verificar os tipos manualmente
-                const media = await message.downloadMedia();
+            // Processamento da mídia
+            if (message.hasMedia) {
+                const media = await message.downloadMedia();
 
-                if (media) {
+                if (media) {
                     const extension = media.mimetype.split('/')[1].split(';')[0] || 'bin';
-                    const filename = `${Date.now()}-${uuidv4()}.${extension}`; // Nome único do arquivo
-                    const fullPath = path.join(mediaDir, filename); // Usa o diretório de mídia global
+                    const filename = `${Date.now()}-${uuidv4()}.${extension}`; // Nome único do arquivo
+                    const fullPath = path.join(mediaDir, filename); // Usa o diretório de mídia global
 
-                    fs.writeFileSync(fullPath, Buffer.from(media.data, 'base64'));
-                    console.log(`💾 Mídia salva localmente: ${fullPath}`);
+                    fs.writeFileSync(fullPath, Buffer.from(media.data, 'base64'));
+                    console.log(`💾 Mídia salva localmente: ${fullPath}`);
 
-                    const mediaUrl = `${process.env.PUBLIC_URL}/media/${filename}`;
+                    const mediaUrl = `${PUBLIC_URL}/media/${filename}`;
 
-                    // Popula o objeto de mídia específico no payload
-                    switch (message.type) {
-                        case 'audio':
-                        case 'ptt': // Push to talk (áudio)
-                            payload.audio = {
-                                mime_type: media.mimetype,
-                                filename: message._data?.filename || filename, // Tenta usar o nome original, fallback para o gerado
-                                url: mediaUrl
-                            };
-                            break;
-                        case 'image':
-                            payload.image = {
-                                mime_type: media.mimetype,
-                                filename: message.caption || message._data?.filename || filename, // Legenda, nome original ou gerado
-                                url: mediaUrl
-                            };
-                            break;
-                        case 'video':
-                            payload.video = {
-                                mime_type: media.mimetype,
-                                filename: message.caption || message._data?.filename || filename, // Legenda, nome original ou gerado
-                                url: mediaUrl
-                            };
-                            break;
-                        case 'document':
-                            payload.document = {
-                                mime_type: media.mimetype,
-                                filename: message.filename || message._data?.filename || filename, // Nome original, ou gerado
-                                url: mediaUrl
-                            };
-                            break;
-                        default:
-                            // Para outros tipos de mídia que você não quer tratar separadamente
-                            payload.other_media = {
-                                mime_type: media.mimetype,
-                                filename: message._data?.filename || filename,
-                                url: mediaUrl
-                            };
-                            console.log(`⚠️ Tipo de mídia não tratado especificamente: ${message.type}`);
-                            break;
-                    }
-                }
-            } else if (message.type === 'chat') { // Mensagem de texto simples
-                payload.text.body = message.body;
-            } else {
-                // Mensagens sem mídia e não texto (ex: location, contact_card, sticker)
-                // Você pode adicionar mais cases aqui ou enviar o objeto message completo
-                payload.unknown_message_data = message;
-                console.log(`⚠️ Tipo de mensagem não tratado: ${message.type}`);
-            }
+                    // Popula o objeto de mídia específico no payload
+                    switch (message.type) {
+                        case 'audio':
+                        case 'ptt': // Push to talk (áudio)
+                            payload.audio = {
+                                mime_type: media.mimetype,
+                                filename: message._data?.filename || filename, // Tenta usar o nome original, fallback para o gerado
+                                url: mediaUrl
+                            };
+                            break;
+                        case 'image':
+                            payload.image = {
+                                mime_type: media.mimetype,
+                                filename: message.caption || message._data?.filename || filename, // Legenda, nome original ou gerado
+                                url: mediaUrl
+                            };
+                            break;
+                        case 'video':
+                            payload.video = {
+                                mime_type: media.mimetype,
+                                filename: message.caption || message._data?.filename || filename, // Legenda, nome original ou gerado
+                                url: mediaUrl
+                            };
+                            break;
+                        case 'document':
+                            payload.document = {
+                                mime_type: media.mimetype,
+                                filename: message.filename || message._data?.filename || filename, // Nome original, ou gerado
+                                url: mediaUrl
+                            };
+                            break;
+                        default:
+                            payload.other_media = {
+                                mime_type: media.mimetype,
+                                filename: message._data?.filename || filename,
+                                url: mediaUrl
+                            };
+                            console.log(`⚠️ Tipo de mídia não tratado especificamente: ${message.type}`);
+                            break;
+                    }
+                }
+            } else if (message.type === 'chat') { // Mensagem de texto simples
+                payload.text.body = message.body;
+            } else {
+                payload.unknown_message_data = message;
+                console.log(`⚠️ Tipo de mensagem não tratado: ${message.type}`);
+            }
 
-            // Envia o payload completo para o n8n
-            // Produção
-            //const response = await axios.post('https://vivya.app.n8n.cloud/webhook/56816120-1928-4e36-9e36-7dfdf5277260', payload);
-            // Teste
-            //const response = await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
-            // Envia mensagem e aguarda resposta
-            //if (response.data && response.data.reply) {
-            //    await client.sendMessage(message.from, response.data.reply);
-            //} else {
-            //    console.warn('⚠️ Resposta do webhook do n8n não continha "reply".');
-            //}
+            try {
+                console.log('DEBUG: Tentando enviar payload para n8n...');
+                await axios.post(N8N_WEBHOOK_URL, payload);
+                console.log('DEBUG: Payload enviado para n8n com sucesso.');
+            } catch (error) {
+                console.error('DEBUG: Erro ao enviar payload para n8n:', error.message);
+            }
 
-            // Apenas "dispara e esquece" (fire and forget) a chamada para o n8n.
-            // É importante que o n8n não retorne um erro HTTP aqui, apenas 200 OK.
-            //await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
-            //console.log('Payload enviado para n8n com sucesso. Esperando resposta do n8n via webhook.');
+        } catch (error) {
+            console.error('❌ Erro no webhook ou no processamento da mensagem:', error.message);
+        }
+    });
 
+    client.on('auth_failure', async (msg) => {
+        console.error('🔐 Falha de autenticação:', msg);
+        console.error('Reinicializando sessão após falha de autenticação...');
+        isBotInitializing = false; // Permitir nova inicialização
+        await client.destroy(); // Destrói o cliente atual
+        // Não é necessário remover arquivos de sessão aqui, pois o destroy() é suficiente
+        // e queremos que o LocalAuth tente reusar a mesma pasta na próxima inicialização.
+        startClient(); // Tenta iniciar novamente, possivelmente gerando novo QR
+    });
 
-            try {
-                console.log('DEBUG: Tentando enviar payload para n8n...');
-                await axios.post('https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260', payload);
-                console.log('DEBUG: Payload enviado para n8n com sucesso.');
-            } catch (error) {
-                console.error('DEBUG: Erro ao enviar payload para n8n:', error.message);
-            }
+    client.on('disconnected', async (reason) => {
+        console.warn(`⚠️ Cliente desconectado: ${reason}`);
+        isBotInitializing = false; // Permitir nova inicialização
+        if (client && client.pupBrowser) { // Verifica se o navegador ainda está aberto antes de tentar destruir
+            await client.destroy();
+            console.log('✅ Cliente destruído após desconexão.');
+        } else {
+            console.log('ℹ️ Cliente já estava fechado ou não tinha navegador para destruir.');
+        }
+        startClient(); // Tenta iniciar novamente
+    });
 
-
-        } catch (error) {
-            console.error('❌ Erro no webhook ou no processamento da mensagem:', error.message);
-            // Considere enviar uma mensagem de erro ou logar mais detalhes
-        }
-    });
-
-    client.on('auth_failure', async () => {
-        console.error('🔐 Falha de autenticação. Reinicializando sessão...');
-        await client.destroy();
-        startClient();
-    });
-
-    client.on('disconnected', async (reason) => {
-        console.warn(`⚠️ Cliente desconectado: ${reason}`);
-        await client.destroy();
-        startClient();
-    });
-
-    client.initialize();
+    client.initialize();
 }
 
+// Inicia o cliente na inicialização do aplicativo Node.js
 startClient();
+
+// --- Endpoints HTTP do Bot ---
 
 // Endpoint raiz
 app.get('/', (req, res) => {
-    res.send('🤖 Bot do WhatsApp está rodando!');
+    res.send('🤖 Bot do WhatsApp está rodando!');
 });
 
-// Endpoint para reset manual da sessão
+/**
+ * Endpoint para reset manual da sessão.
+ * Este endpoint irá destruir a sessão atual e apagar seus arquivos,
+ * forçando o bot a gerar um novo QR Code na próxima inicialização.
+ */
 app.post('/reset-session', async (req, res) => {
-    console.log('🔄 Requisição de reset de sessão recebida no bot.');
-    try {
-        // 1. Tentar destruir o cliente WhatsApp Web JS se ele estiver ativo
-        if (client && client.pupBrowser) { // Verifica se o cliente está ativo e tem um navegador Puppeteer
-            console.log('🔌 Tentando destruir o cliente WhatsApp Web.');
-            await client.destroy();
-            console.log('✅ Cliente WhatsApp Web destruído.');
-        } else {
-            console.log('ℹ️ Cliente WhatsApp Web não estava ativo para destruir.');
-        }
+    console.log('🔄 Requisição de reset de sessão recebida no bot.');
+    try {
+        // 1. Destruir o cliente WhatsApp Web JS se ele estiver ativo
+        if (client && client.pupBrowser) {
+            console.log('🔌 Tentando destruir o cliente WhatsApp Web.');
+            await client.destroy();
+            console.log('✅ Cliente WhatsApp Web destruído.');
+        } else {
+            console.log('ℹ️ Cliente WhatsApp Web não estava ativo para destruir.');
+        }
 
-        // 2. Mudar o clientId para forçar uma nova sessão
-        currentClientId = `bot-principal-${Date.now()}`; // Usa um timestamp para um ID único
-        console.log(`🆕 Novo Client ID para próxima sessão: ${currentClientId}`);
+        // 2. Apagar os arquivos da sessão persistida para forçar um novo QR Code
+        if (fs.existsSync(CLIENT_SESSION_DIR)) {
+            console.log(`🧹 Removendo arquivos de sessão de: ${CLIENT_SESSION_DIR}`);
+            fs.rmSync(CLIENT_SESSION_DIR, { recursive: true, force: true });
+            console.log('✅ Arquivos de sessão removidos.');
+        } else {
+            console.log('ℹ️ Diretório de sessão não encontrado para remover.');
+        }
 
-        // 3. Enviar a resposta de sucesso
-        // É CRÍTICO enviar a resposta AQUI e APENAS AQUI.
-        res.status(200).json({ message: 'Sessão do bot resetada. O bot tentará se reconectar com um novo Client ID.' });
-        console.log('✅ Resposta de reset enviada ao microserviço.');
+        // 3. Resetar a flag de inicialização para permitir um novo start
+        isBotInitializing = false;
 
-        // 4. Iniciar o cliente NOVAMENTE para forçar um novo QR Code.
-        // Envolver em um timeout para garantir que a resposta HTTP foi enviada
-        // e que o sistema teve um momento para processar (se aplicável).
-        setTimeout(() => {
-            console.log('🚀 Iniciando novamente o cliente WhatsApp Web para gerar novo QR.');
-            startClient(); // Chama a função que inicializa o client com o novo ID
-        }, 1000); // Pequeno atraso para evitar conflitos imediatos
+        // 4. Enviar a resposta de sucesso
+        res.status(200).json({ message: 'Sessão do bot resetada e arquivos removidos. O bot tentará se reconectar e gerará um novo QR Code.' });
+        console.log('✅ Resposta de reset enviada ao microserviço.');
 
-    } catch (err) {
-        console.error('❌ Erro inesperado ao resetar sessão manualmente:', err);
-        // Em caso de erro na lógica de reset, envia uma resposta de erro
-        if (!res.headersSent) { // Verifica se a resposta já não foi enviada
-            res.status(500).json({ error: 'Erro interno ao tentar resetar sessão.', details: err.message });
-        }
-    }
-});
+        // 5. Iniciar o cliente NOVAMENTE para forçar um novo QR Code.
+        // Pequeno atraso para garantir que a resposta HTTP foi enviada
+        setTimeout(() => {
+            console.log('🚀 Iniciando novamente o cliente WhatsApp Web para gerar novo QR.');
+            startClient(); // Chama a função que inicializa o client com o ID fixo
+        }, 1000);
 
-app.post('/api/request-qr', async (req, res) => {
-    console.log('🔄 Solicitação de QR code recebida do microserviço.');
-    if (!client || !client.info) { // Se o cliente não estiver inicializado ou conectado
-        console.log('Bot não conectado ou inicializado. Forçando inicialização para gerar QR.');
-        // Chamar initialize() novamente, o que deve gerar um QR se não houver sessão válida
-        client.initialize(); 
-        res.status(200).send('Bot instruído a iniciar/gerar QR.');
-    } else if (client.info && client.info.status !== 'CONNECTED') { // Se estiver em algum estado diferente de conectado
-        console.log('Bot não está em estado conectado. Forçando inicialização para gerar QR.');
-        client.initialize();
-        res.status(200).send('Bot instruído a iniciar/gerar QR.');
-    }
-    else {
-        console.log('Bot já conectado, não é necessário gerar QR.');
-        res.status(200).send('Bot já conectado.');
-    }
-});
-
-
-// endpoint para iniciar o estado de "digitando"
-app.post('/api/set-typing-state', async (req, res) => {
-    const { to } = req.body; // 'to' é o número do remetente (message.from do payload original)
-
-    if (!to) {
-        return res.status(400).json({ error: 'Parâmetro "to" é obrigatório para definir o estado de digitação.' });
+    } catch (err) {
+        console.error('❌ Erro inesperado ao resetar sessão manualmente:', err);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Erro interno ao tentar resetar sessão.', details: err.message });
+        }
     }
-    if (!client || !client.info) {
+});
+
+/**
+ * Endpoint para o microserviço solicitar um QR Code.
+ * Útil para sincronização na inicialização ou após falhas.
+ */
+app.post('/api/request-qr', async (req, res) => {
+    console.log('🔄 Solicitação de QR code recebida do microserviço.');
+    // Se o cliente não estiver conectado ou estiver inicializando, force uma nova inicialização
+    if (!client || !client.info || client.info.status !== 'CONNECTED') {
+        console.log('Bot não conectado ou inicializado. Forçando inicialização para gerar QR.');
+        startClient(); // Tenta iniciar/re-inicializar o cliente
+        res.status(200).send('Bot instruído a iniciar/gerar QR.');
+    } else {
+        console.log('Bot já conectado, não é necessário gerar QR.');
+        res.status(200).send('Bot já conectado.');
+    }
+});
+
+// --- Endpoints para Controle de Estado do Chat (Digitando/Gravando/Limpar) ---
+
+app.post('/api/set-typing-state', async (req, res) => {
+    const { to } = req.body;
+    if (!to) return res.status(400).json({ error: 'Parâmetro "to" é obrigatório.' });
+    if (!client || !client.info || client.info.status !== 'CONNECTED') {
         console.warn('⚠️ Tentativa de definir estado de digitação, mas o bot não está conectado.');
         return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp.' });
     }
-
     try {
-        const chat = await client.getChatById(to); // Obtém o objeto Chat
+        const chat = await client.getChatById(to);
         if (chat) {
-            await chat.sendStateTyping(); // Chama o método no objeto Chat
+            await chat.sendStateTyping();
             console.log(`💬 Definido estado 'digitando' para: ${to}`);
             res.status(200).json({ success: true, message: 'Estado de digitação definido.' });
         } else {
@@ -349,23 +402,17 @@ app.post('/api/set-typing-state', async (req, res) => {
     }
 });
 
-
-// endpoint para iniciar o estado de "gravando"
 app.post('/api/set-recording-state', async (req, res) => {
-    const { to } = req.body; // 'to' é o número do remetente
-
-    if (!to) {
-        return res.status(400).json({ error: 'Parâmetro "to" é obrigatório para definir o estado de gravação.' });
-    }
-    if (!client || !client.info) {
+    const { to } = req.body;
+    if (!to) return res.status(400).json({ error: 'Parâmetro "to" é obrigatório.' });
+    if (!client || !client.info || client.info.status !== 'CONNECTED') {
         console.warn('⚠️ Tentativa de definir estado de gravação, mas o bot não está conectado.');
         return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp.' });
     }
-
     try {
-        const chat = await client.getChatById(to); // Obtém o objeto Chat
+        const chat = await client.getChatById(to);
         if (chat) {
-            await chat.sendStateRecording(); // Chama o método no objeto Chat
+            await chat.sendStateRecording();
             console.log(`🎤 Definido estado 'gravando' para: ${to}`);
             res.status(200).json({ success: true, message: 'Estado de gravação definido.' });
         } else {
@@ -377,25 +424,18 @@ app.post('/api/set-recording-state', async (req, res) => {
         res.status(500).json({ success: false, error: 'Falha ao definir estado de gravação.', details: error.message });
     }
 });
-   
 
-// Novo endpoint para limpar o estado de "digitando" ou "gravando"
 app.post('/api/clear-chat-state', async (req, res) => {
-    const { to } = req.body; // 'to' é o número do remetente
-
-    if (!to) {
-        return res.status(400).json({ error: 'Parâmetro "to" é obrigatório para limpar o estado do chat.' });
-    }
-    if (!client || !client.info) {
+    const { to } = req.body;
+    if (!to) return res.status(400).json({ error: 'Parâmetro "to" é obrigatório.' });
+    if (!client || !client.info || client.info.status !== 'CONNECTED') {
         console.warn('⚠️ Tentativa de limpar estado do chat, mas o bot não está conectado.');
-        // Considerar retornar sucesso aqui para não bloquear o n8n se o bot estiver offline
         return res.status(200).json({ success: true, message: 'Bot não conectado, estado não limpo (mas não é um erro crítico).' });
     }
-
     try {
-        const chat = await client.getChatById(to); // Obtém o objeto Chat
+        const chat = await client.getChatById(to);
         if (chat) {
-            await chat.clearState(); // Chama o método no objeto Chat
+            await chat.clearState();
             console.log(`❌ Estado de chat limpo para: ${to}`);
             res.status(200).json({ success: true, message: 'Estado de chat limpo.' });
         } else {
@@ -408,55 +448,40 @@ app.post('/api/clear-chat-state', async (req, res) => {
     }
 });
 
-
-
+/**
+ * Endpoint para enviar mensagens de WhatsApp (texto ou mídia).
+ * Recebe 'to', 'message' (para texto) e/ou 'mediaType', 'mediaUrl', 'caption', 'filename' (para mídia).
+ */
 app.post('/api/send-whatsapp-message', async (req, res) => {
     const { to, message, mediaType, mediaUrl, caption, filename } = req.body;
 
     if (!to) {
         return res.status(400).json({ error: 'Parâmetro "to" é obrigatório.' });
     }
-
-    if (!client || !client.info) {
+    if (!client || !client.info || client.info.status !== 'CONNECTED') {
         console.error('❌ Cliente WhatsApp não está pronto ou conectado para enviar mensagem.');
         return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp.' });
     }
 
     try {
         if (mediaType && mediaUrl) {
-            // Se há mídia, tenta enviar a mídia
             const media = await MessageMedia.fromUrl(mediaUrl);
             let options = {};
-
-            if (caption) {
-                options.caption = caption;
-            }
-            if (filename) {
-                options.filename = filename;
-            }
+            if (caption) options.caption = caption;
+            if (filename) options.filename = filename;
 
             switch (mediaType) {
                 case 'image':
-                    // Para imagens
-                    await client.sendMessage(to, media, options);
-                    console.log(`✅ Imagem enviada para ${to} da URL: ${mediaUrl}`);
-                    break;
                 case 'video':
-                    // Para vídeos
+                case 'document':
                     await client.sendMessage(to, media, options);
-                    console.log(`✅ Vídeo enviado para ${to} da URL: ${mediaUrl}`);
+                    console.log(`✅ ${mediaType} enviado para ${to} da URL: ${mediaUrl}`);
                     break;
                 case 'audio':
-                case 'ptt': // Tratar 'audio' e 'ptt' da mesma forma, enviando como voz
-                    // Para áudio (enviado como PTT/voz)
-                    options.sendAudioAsVoice = true; // ISSO FAZ O ÁUDIO SER ENVIADO COMO VOZ/PTT
+                case 'ptt':
+                    options.sendAudioAsVoice = true; // Envia áudio como gravação de voz
                     await client.sendMessage(to, media, options);
                     console.log(`✅ Áudio (PTT) enviado para ${to} da URL: ${mediaUrl}`);
-                    break;
-                case 'document':
-                    // Para documentos
-                    await client.sendMessage(to, media, options);
-                    console.log(`✅ Documento enviado para ${to} da URL: ${mediaUrl}`);
                     break;
                 default:
                     console.warn(`⚠️ Tipo de mídia desconhecido: ${mediaType}. Tentando enviar como mensagem de texto.`);
@@ -468,7 +493,6 @@ app.post('/api/send-whatsapp-message', async (req, res) => {
                     }
             }
         } else if (message) {
-            // Se não há mídia, envia a mensagem de texto
             await client.sendMessage(to, message);
             console.log(`✅ Mensagem de texto enviada para ${to}: ${message}`);
         } else {
@@ -483,19 +507,19 @@ app.post('/api/send-whatsapp-message', async (req, res) => {
 });
 
 
-
 console.log('🟡 Tentando iniciar servidor Express...');
 // Inicializa servidor na porta correta
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor rodando na porta ${PORT}`);
+    console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
 
 // Captura falhas não tratadas
 process.on('unhandledRejection', (reason, p) => {
-    console.error('🚨 Erro não tratado:', reason);
+    console.error('🚨 Erro não tratado (Promise Rejection):', reason);
 });
 
 process.on('uncaughtException', (err) => {
-    console.error('🚨 Exceção não capturada:', err);
+    console.error('🚨 Exceção não capturada:', err);
+    process.exit(1); // É uma boa prática sair para permitir que o Railway reinicie o app
 });
