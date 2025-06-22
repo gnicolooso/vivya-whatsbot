@@ -52,6 +52,7 @@ console.log(`📂 Servindo arquivos estáticos de: ${mediaDir}`);
 
 let client; // Variável global para o cliente WhatsApp
 let isBotInitializing = false; // Flag para evitar inicializações múltiplas
+let isBotReallyConnected = false; 
 
 // Função para garantir que os diretórios existam
 function ensureSessionDirectoriesExist() {
@@ -119,6 +120,7 @@ function startClient() {
         return;
     }
     isBotInitializing = true;
+    isBotReallyConnected = false; // Resetar o status ao iniciar
 
     console.log('🟢 Inicializando cliente WhatsApp Web...');
     client = new Client({
@@ -145,6 +147,7 @@ function startClient() {
     client.on('qr', async (qr) => {
         qrcode.generate(qr, { small: true });
         console.log('📱 QR code gerado. Escaneie com o WhatsApp.');
+        isBotReallyConnected = false; // Não conectado ainda
 
         try {
             await axios.post(`${QR_SERVICE_URL}/api/qr`, { qr });
@@ -157,6 +160,7 @@ function startClient() {
     client.on('ready', async () => {
         console.log('✅ Cliente conectado ao WhatsApp!');
         isBotInitializing = false; // Resetar flag após conexão bem-sucedida
+        isBotReallyConnected = true; // Definir como TRUE aqui!
         try {
             await axios.post(`${QR_SERVICE_URL}/api/connected`);
             console.log(`✅ Status de conexão enviado ao microserviço. Status = ${client.info.status}`);
@@ -281,6 +285,7 @@ function startClient() {
         console.error('🔐 Falha de autenticação:', msg);
         console.error('Reinicializando sessão após falha de autenticação...');
         isBotInitializing = false; // Permitir nova inicialização
+        isBotReallyConnected = false; // Não conectado
         await client.destroy(); // Destrói o cliente atual
         // Não é necessário remover arquivos de sessão aqui, pois o destroy() é suficiente
         // e queremos que o LocalAuth tente reusar a mesma pasta na próxima inicialização.
@@ -290,6 +295,7 @@ function startClient() {
     client.on('disconnected', async (reason) => {
         console.warn(`⚠️ Cliente desconectado: ${reason}`);
         isBotInitializing = false; // Permitir nova inicialização
+        isBotReallyConnected = false; // Não conectado
         if (client && client.pupBrowser) { // Verifica se o navegador ainda está aberto antes de tentar destruir
             await client.destroy();
             console.log('✅ Cliente destruído após desconexão.');
@@ -304,6 +310,11 @@ function startClient() {
         console.log('🔄 Estado do cliente WhatsApp-web.js mudou para:', state);
         // Possíveis estados: CONNECTED, DISCONNECTED, INITIALIZING, QRCODE_RECEIVED, AUTHENTICATING,
         // AUTH_FAILURE, LOADING_CHATTS
+        if (state === 'CONNECTED') {
+            isBotReallyConnected = true;
+        } else {
+            isBotReallyConnected = false;
+        }
     });    
 
     client.initialize();
@@ -315,8 +326,8 @@ startClient();
 // --- Funções Auxiliares para Verificar o Status do Cliente ---
 // Centraliza a lógica de verificação de conexão
 function isClientConnected() {
-    // client deve existir e estar no estado 'CONNECTED'
-    return client && client.info && client.info.status === 'CONNECTED';
+    // client deve existir e estar conectado
+    return isBotReallyConnected && client; 
 }
 
 // --- Endpoints HTTP do Bot ---
@@ -396,13 +407,9 @@ app.post('/api/request-qr', async (req, res) => {
 app.post('/api/set-typing-state', async (req, res) => {
     const { to } = req.body;
     if (!to) return res.status(400).json({ error: 'Parâmetro "to" é obrigatório.' });
-    //if (!client || !client.info || client.info.status !== 'CONNECTED') {
-    //    console.warn('⚠️ Tentativa de definir estado de digitação, mas o bot não está conectado.');
-    //    return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp.' });
-    //}
-    // Usar a nova função auxiliar para verificar o status
-    if (!isClientConnected()) {
-        console.warn(`⚠️ Tentativa de definir estado de digitação para ${to}, mas o bot não está conectado. Status atual: ${client?.info?.status || 'N/A'}`);
+
+    if (!isClientConnected()) { 
+        console.warn(`⚠️ Tentativa de definir estado de digitação para ${to}, mas o bot não está conectado. isBotReallyConnected: ${isBotReallyConnected}. client.info.status: ${client?.info?.status || 'N/A'}`);
         return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp. Tente novamente mais tarde.' });
     }
 
@@ -425,9 +432,9 @@ app.post('/api/set-typing-state', async (req, res) => {
 app.post('/api/set-recording-state', async (req, res) => {
     const { to } = req.body;
     if (!to) return res.status(400).json({ error: 'Parâmetro "to" é obrigatório.' });
-    if (!client || !client.info || client.info.status !== 'CONNECTED') {
-        console.warn('⚠️ Tentativa de definir estado de gravação, mas o bot não está conectado.');
-        return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp.' });
+    if (!isClientConnected()) { 
+        console.warn(`⚠️ Tentativa de definir estado de digitação para ${to}, mas o bot não está conectado. isBotReallyConnected: ${isBotReallyConnected}. client.info.status: ${client?.info?.status || 'N/A'}`);
+        return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp. Tente novamente mais tarde.' });
     }
     try {
         const chat = await client.getChatById(to);
@@ -448,9 +455,9 @@ app.post('/api/set-recording-state', async (req, res) => {
 app.post('/api/clear-chat-state', async (req, res) => {
     const { to } = req.body;
     if (!to) return res.status(400).json({ error: 'Parâmetro "to" é obrigatório.' });
-    if (!client || !client.info || client.info.status !== 'CONNECTED') {
-        console.warn('⚠️ Tentativa de limpar estado do chat, mas o bot não está conectado.');
-        return res.status(200).json({ success: true, message: 'Bot não conectado, estado não limpo (mas não é um erro crítico).' });
+    if (!isClientConnected()) { 
+        console.warn(`⚠️ Tentativa de definir estado de digitação para ${to}, mas o bot não está conectado. isBotReallyConnected: ${isBotReallyConnected}. client.info.status: ${client?.info?.status || 'N/A'}`);
+        return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp. Tente novamente mais tarde.' });
     }
     try {
         const chat = await client.getChatById(to);
