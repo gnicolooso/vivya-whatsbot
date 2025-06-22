@@ -159,7 +159,7 @@ function startClient() {
         isBotInitializing = false; // Resetar flag após conexão bem-sucedida
         try {
             await axios.post(`${QR_SERVICE_URL}/api/connected`);
-            console.log('✅ Status de conexão enviado ao microserviço.');
+            console.log(`✅ Status de conexão enviado ao microserviço. Status = ${client.info.status}`);
         } catch (error) {
             console.error('❌ Erro ao atualizar status de conexão no microserviço:', error.message);
         }
@@ -299,11 +299,25 @@ function startClient() {
         startClient(); // Tenta iniciar novamente
     });
 
+    // Adicionar um evento de estado para debug
+    client.on('change_state', state => {
+        console.log('🔄 Estado do cliente WhatsApp-web.js mudou para:', state);
+        // Possíveis estados: CONNECTED, DISCONNECTED, INITIALIZING, QRCODE_RECEIVED, AUTHENTICATING,
+        // AUTH_FAILURE, LOADING_CHATTS
+    });    
+
     client.initialize();
 }
 
 // Inicia o cliente na inicialização do aplicativo Node.js
 startClient();
+
+// --- Funções Auxiliares para Verificar o Status do Cliente ---
+// Centraliza a lógica de verificação de conexão
+function isClientConnected() {
+    // client deve existir e estar no estado 'CONNECTED'
+    return client && client.info && client.info.status === 'CONNECTED';
+}
 
 // --- Endpoints HTTP do Bot ---
 
@@ -382,10 +396,16 @@ app.post('/api/request-qr', async (req, res) => {
 app.post('/api/set-typing-state', async (req, res) => {
     const { to } = req.body;
     if (!to) return res.status(400).json({ error: 'Parâmetro "to" é obrigatório.' });
-    if (!client || !client.info || client.info.status !== 'CONNECTED') {
-        console.warn('⚠️ Tentativa de definir estado de digitação, mas o bot não está conectado.');
-        return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp.' });
+    //if (!client || !client.info || client.info.status !== 'CONNECTED') {
+    //    console.warn('⚠️ Tentativa de definir estado de digitação, mas o bot não está conectado.');
+    //    return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp.' });
+    //}
+    // Usar a nova função auxiliar para verificar o status
+    if (!isClientConnected()) {
+        console.warn(`⚠️ Tentativa de definir estado de digitação para ${to}, mas o bot não está conectado. Status atual: ${client?.info?.status || 'N/A'}`);
+        return res.status(500).json({ error: 'Bot não está conectado ao WhatsApp. Tente novamente mais tarde.' });
     }
+
     try {
         const chat = await client.getChatById(to);
         if (chat) {
