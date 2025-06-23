@@ -2,7 +2,8 @@
 
 const fs = require('fs').promises; // Usando a versão de Promises do módulo 'fs' para operações assíncronas
 const path = require('path');
-const { SESSION_DIR, CLIENT_SESSION_DIR, MEDIA_DIR } = require('../config');
+// Importar as variáveis de configuração do módulo config
+const { SESSION_DIR, CLIENT_SESSION_DIR, MEDIA_DIR, CLIENT_ID } = require('../config');
 
 /**
  * @file Funções utilitárias para operações de sistema de arquivos.
