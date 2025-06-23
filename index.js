@@ -429,7 +429,7 @@ app.post('/api/set-typing-state', async (req, res) => {
     }
 });
 
-app.post('/api/set-recording-state', async (req, res) => {
+app.post('/api/set-recording-state', async (req, res) =>  {
     const { to } = req.body;
     if (!to) return res.status(400).json({ error: 'Parâmetro "to" é obrigatório.' });
     if (!isClientConnected()) { 
