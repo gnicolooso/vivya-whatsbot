@@ -7,7 +7,7 @@ const fs = require('fs').promises; // Usando a versão de Promises do módulo 'f
 
 // Importações dos módulos refatorados
 const config = require('./config'); // Módulo de configuração
-const { ensureCriticalDirectoriesExist } = require('./utils/fsUtils'); // Utilitários de sistema de arquivos
+const { ensureCriticalDirectoriesExist } = require('./utils/fsUtils'); // Utilitários de sistema de arquivos 
 const { startWhatsAppClient } = require('./whatsapp/client'); // Gerenciamento do cliente WhatsApp
 const whatsappApiRoutes = require('./routes/whatsappApi'); // Rotas da API do WhatsApp
 

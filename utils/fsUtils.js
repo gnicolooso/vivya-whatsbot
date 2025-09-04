@@ -1,6 +1,6 @@
 // utils/fsUtils.js
 
-const fs = require('fs').promises; // Usando a versão de Promises do módulo 'fs' para operações assíncronas
+const fs = require('fs').promises; // Usando a versão de Promises do módulo 'fs' para operações assíncronas 
 const path = require('path');
 // Importar as variáveis de configuração do módulo config
 const { SESSION_DIR, CLIENT_SESSION_DIR, MEDIA_DIR, CLIENT_ID } = require('../config');

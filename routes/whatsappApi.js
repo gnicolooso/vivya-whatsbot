@@ -12,7 +12,7 @@ const { QR_SERVICE_URL } = require('../config');
 
 const router = express.Router();
 
-/**
+/** 
  * Middleware para verificar se o bot está conectado antes de processar requisições que dependem dele.
  * @param {object} req - Objeto de requisição do Express.
  * @param {object} res - Objeto de resposta do Express.

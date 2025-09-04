@@ -10,7 +10,7 @@ const { CLIENT_ID, SESSION_DIR, CLIENT_SESSION_DIR, QR_SERVICE_URL, N8N_WEBHOOK_
 const { pathExists } = require('../utils/fsUtils'); // Importa a função utilitária
 
 /**
- * @file Gerencia a inicialização, eventos e estado do cliente WhatsApp-web.js.
+ * @file Gerencia a inicialização, eventos e estado do cliente WhatsApp-web.js. 
  * Centraliza toda a lógica de interação com a biblioteca do WhatsApp.
  */
 
