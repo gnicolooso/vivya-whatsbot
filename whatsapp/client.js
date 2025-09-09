@@ -56,6 +56,12 @@ async function startWhatsAppClient() {
     client = new Client({
         // Usa LocalAuth com o CLIENT_ID fixo e o dataPath apontando para a raiz do volume
         authStrategy: new LocalAuth({ clientId: CLIENT_ID, dataPath: SESSION_DIR }),
+
+        webVersionCache: {
+            type: 'remote',
+            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+        },
+
         puppeteer: {
             headless: true, // Modo headless (sem interface gráfica)
             args: [
