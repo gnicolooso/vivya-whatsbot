@@ -112,48 +112,36 @@ async function startWhatsAppClient() {
         }
     });
 
+    // Evento 'message_create': Disparado para QUALQUER nova mensagem (recebida ou enviada).
 
-    // Listener de teste para o evento 'message_create'
-    client.on('message_create', (message) => {
-        // Apenas para sabermos que o evento foi disparado
-        console.log('✅ --- EVENTO "message_create" DISPARADO! --- ✅');
-        
-        // Log para diferenciar claramente mensagens enviadas vs. recebidas
-        if (message.fromMe) {
-            console.log('DEBUG (message_create): Mensagem ENVIADA PELO AGENTE detectada.');
-        } else {
-            console.log('DEBUG (message_create): Mensagem RECEBIDA DE UM LEAD detectada.');
-        }
-        
-        // Log do objeto completo para análise profunda de suas propriedades
+    client.on('message_create', async message => {
+
+        // Mantido: Log de debug detalhado para cada mensagem processada
+        console.log('--- NOVA MENSAGEM CRIADA (message_create) ---');
         console.log(JSON.stringify(message, null, 2));
-        console.log('----------------------------------------------------');
-    });    
+        console.log('-------------------------------------------');
 
-    // Evento 'message': Disparado ao receber uma nova mensagem.
-    client.on('message', async message => {
-
-        console.log('--- NOVA MENSAGEM RECEBIDA ---');
-        console.log(JSON.stringify(message, null, 2)); // O 'null, 2' formata o JSON para fácil leitura
-        console.log('-----------------------------');
-
-        // Ignora mensagens de status e mensagens de grupo
+        // Mantido: Ignora mensagens de status e mensagens de grupo
         if (message.isStatus || message.isGroupMsg) return;
 
         try {
             const chat = await message.getChat();
             const contact = await message.getContact();
-            const botInfo = client.info; // Informações do cliente/bot
+            const botInfo = client.info;
 
-            // Inicializa o payload com informações comuns, simulando a estrutura da API do WhatsApp Business
+            // Mantido: Inicializa o payload com informações comuns, simulando a estrutura da API do WhatsApp Business
             console.log('DEBUG: Inicializa o payload para n8n...');
             const payload = {
-                // Informações do bot (simulando algumas variáveis da API do WhatsApp Business)
+                // Mantido: Informações do bot (simulando algumas variáveis da API do WhatsApp Business)
                 phone_number_id: botInfo.wid.user, // O ID do número do bot
                 display_phone_number: botInfo.pushname || botInfo.wid.user, // Nome do perfil do bot ou ID
 
-                // Informações do remetente
+                // Mantido: Informações do remetente
                 from: message.from.split('@')[0], // Número de telefone do remetente. Remove o "@c.us" do final
+                
+                // Adicionado: Informação do destinatário, crucial para mensagens 'fromMe'
+                to: message.to.split('@')[0], 
+                
                 contacts: {
                     profile: {
                         name: contact.pushname || contact.name // Nome do contato no WhatsApp
@@ -161,12 +149,15 @@ async function startWhatsAppClient() {
                 },
                 is_group: chat.isGroup,
 
-                // Informações da mensagem
+                // Adicionado: Campo 'from_me' explícito para facilitar a lógica no n8n
+                from_me: message.fromMe, 
+
+                // Mantido: Informações da mensagem
                 message_id: message.id.id, // ID único da mensagem
                 timestamp: message.timestamp, // Carimbo de data/hora da mensagem
                 message_type: message.type, // Tipo da mensagem (text, image, video, audio, document, sticker, location, etc.)
 
-                // Objetos para conteúdo específico, inicializados vazios
+                // Mantido: Objetos para conteúdo específico, inicializados vazios
                 text: {},
                 audio: {},
                 video: {},
@@ -174,79 +165,47 @@ async function startWhatsAppClient() {
                 document: {},
             };
 
-            // Processamento da mídia
+            // Mantido: Processamento da mídia (lógica 100% preservada)
             if (message.hasMedia) {
                 const media = await message.downloadMedia();
 
                 if (media) {
-                    // Determina a extensão do arquivo a partir do mimetype ou usa 'bin' como fallback
                     const extension = media.mimetype.split('/')[1]?.split(';')[0] || 'bin';
-                    // Gera um nome de arquivo único para evitar colisões
                     const filename = `${Date.now()}-${uuidv4()}.${extension}`;
-                    // Constrói o caminho completo para salvar a mídia
                     const fullPath = path.join(MEDIA_DIR, filename);
-
-                    // Salva a mídia localmente usando fs.promises.writeFile (assíncrono)
                     await fs.writeFile(fullPath, Buffer.from(media.data, 'base64'));
                     console.log(`💾 Mídia salva localmente: ${fullPath}`);
-
-                    // Constrói a URL pública da mídia para ser enviada ao webhook
                     const mediaUrl = `${PUBLIC_URL}/media/${filename}`;
 
-                    // Popula o objeto de mídia específico no payload com base no tipo de mensagem
                     switch (message.type) {
                         case 'audio':
-                        case 'ptt': // Push to talk (áudio)
-                            payload.audio = {
-                                mime_type: media.mimetype,
-                                // Tenta usar o nome original do arquivo, fallback para o gerado
-                                filename: message._data?.filename || filename,
-                                url: mediaUrl
-                            };
+                        case 'ptt':
+                            payload.audio = { mime_type: media.mimetype, filename: message._data?.filename || filename, url: mediaUrl };
                             break;
                         case 'image':
-                            payload.image = {
-                                mime_type: media.mimetype,
-                                // Legenda, nome original ou gerado
-                                filename: message.caption || message._data?.filename || filename,
-                                url: mediaUrl
-                            };
+                            payload.image = { mime_type: media.mimetype, filename: message.caption || message._data?.filename || filename, url: mediaUrl };
                             break;
                         case 'video':
-                            payload.video = {
-                                mime_type: media.mimetype,
-                                // Legenda, nome original ou gerado
-                                filename: message.caption || message._data?.filename || filename,
-                                url: mediaUrl
-                            };
+                            payload.video = { mime_type: media.mimetype, filename: message.caption || message._data?.filename || filename, url: mediaUrl };
                             break;
                         case 'document':
-                            payload.document = {
-                                mime_type: media.mimetype,
-                                // Nome original ou gerado
-                                filename: message.filename || message._data?.filename || filename,
-                                url: mediaUrl
-                            };
+                            payload.document = { mime_type: media.mimetype, filename: message.filename || message._data?.filename || filename, url: mediaUrl };
                             break;
                         default:
-                            // Para outros tipos de mídia não tratados especificamente
-                            payload.other_media = {
-                                mime_type: media.mimetype,
-                                filename: message._data?.filename || filename,
-                                url: mediaUrl
-                            };
+                            payload.other_media = { mime_type: media.mimetype, filename: message._data?.filename || filename, url: mediaUrl };
                             console.log(`⚠️ Tipo de mídia não tratado especificamente: ${message.type}`);
                             break;
                     }
                 }
-            } else if (message.type === 'text' || message.type === 'chat') {    // Mensagem de texto simples
+            } else if (message.type === 'text' || message.type === 'chat') { // Mantido: Lógica corrigida para texto
                 payload.text.body = message.body;
             } else {
-                // Para tipos de mensagem não reconhecidos ou sem mídia
+                // Mantido: Para tipos de mensagem não reconhecidos ou sem mídia
                 payload.unknown_message_data = message;
                 console.log(`⚠️ Tipo de mensagem não tratado: ${message.type}`);
             }
 
+            // Mantido: Lógica de roteamento para o webhook correto
             if (message.fromMe) {
                 // Se a mensagem veio do nosso número (agente humano), chame o webhook de controle
                 try {
@@ -264,16 +223,16 @@ async function startWhatsAppClient() {
                     console.log('DEBUG: Payload de lead enviado para n8n com sucesso.');
                 } catch (error) {
                     console.error('DEBUG: Erro ao enviar payload de lead para n8n:', error.message);
-                    // Considere um mecanismo de retry ou fila de mensagens aqui para maior robustez                    
                 }
             }
 
-
         } catch (error) {
-            console.error('❌ Erro no processamento da mensagem:', error.message);
-            // Loga o erro, mas não encerra o processo para não perder outras mensagens
+            // Mantido: Tratamento de erro geral
+            console.error('❌ Erro no processamento de "message_create":', error.message);
         }
     });
+
+
 
     // Evento 'auth_failure': Disparado quando a autenticação falha.
     client.on('auth_failure', async (msg) => {
