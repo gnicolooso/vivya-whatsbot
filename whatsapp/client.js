@@ -209,6 +209,11 @@ async function startWhatsAppClient() {
             if (message.fromMe) {
                 // Se a mensagem veio do nosso número (agente humano), chame o webhook de controle
                 try {
+                    // #################### DEBUG ADICIONAL ####################
+                    // Vamos verificar o conteúdo das variáveis de URL antes de usá-las
+                    console.log('DEBUG: Verificando URL do Agente Humano:', N8N_HUMAN_TAKEOVER_WEBHOOK_URL);
+                    console.log('DEBUG: Verificando URL do Lead (para comparação):', N8N_WEBHOOK_URL);
+                    // #######################################################
                     console.log('DEBUG: Mensagem de agente humano detectada. Enviando para o webhook de controle...');
                     await axios.post(N8N_HUMAN_TAKEOVER_WEBHOOK_URL, payload);
                     console.log('DEBUG: Payload de agente humano enviado para n8n com sucesso.');
