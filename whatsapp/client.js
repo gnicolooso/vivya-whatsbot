@@ -6,7 +6,7 @@ const axios = require('axios');
 const fs = require('fs').promises; // Usando a versão de Promises do módulo 'fs'
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { CLIENT_ID, SESSION_DIR, CLIENT_SESSION_DIR, QR_SERVICE_URL, N8N_WEBHOOK_URL, PUBLIC_URL, MEDIA_DIR } = require('../config');
+const { CLIENT_ID, SESSION_DIR, CLIENT_SESSION_DIR, QR_SERVICE_URL, N8N_WEBHOOK_URL, N8N_HUMAN_TAKEOVER_WEBHOOK_URL, PUBLIC_URL, MEDIA_DIR } = require('../config');
 const { pathExists } = require('../utils/fsUtils'); // Importa a função utilitária
 
 /**
@@ -115,7 +115,7 @@ async function startWhatsAppClient() {
     // Evento 'message': Disparado ao receber uma nova mensagem.
     client.on('message', async message => {
         // Ignora mensagens enviadas pelo próprio bot, mensagens de status e mensagens de grupo
-        if (message.fromMe || message.isStatus || message.isGroupMsg) return;
+        if (message.isStatus || message.isGroupMsg) return;
 
         try {
             const chat = await message.getChat();
@@ -224,15 +224,27 @@ async function startWhatsAppClient() {
                 console.log(`⚠️ Tipo de mensagem não tratado: ${message.type}`);
             }
 
-            try {
-                // Envia o payload da mensagem para o webhook do n8n
-                console.log('DEBUG: Tentando enviar payload para n8n...');
-                await axios.post(N8N_WEBHOOK_URL, payload);
-                console.log('DEBUG: Payload enviado para n8n com sucesso.');
-            } catch (error) {
-                console.error('DEBUG: Erro ao enviar payload para n8n:', error.message);
-                // Considere um mecanismo de retry ou fila de mensagens aqui para maior robustez
+            if (message.fromMe) {
+                // Se a mensagem veio do nosso número (agente humano), chame o webhook de controle
+                try {
+                    console.log('DEBUG: Mensagem de agente humano detectada. Enviando para o webhook de controle...');
+                    await axios.post(N8N_HUMAN_TAKEOVER_WEBHOOK_URL, payload);
+                    console.log('DEBUG: Payload de agente humano enviado para n8n com sucesso.');
+                } catch (error) {
+                    console.error('DEBUG: Erro ao enviar payload de agente humano para n8n:', error.message);
+                }
+            } else {
+                // Se a mensagem veio de um lead, chame o webhook principal
+                try {
+                    console.log('DEBUG: Mensagem de lead detectada. Enviando para o webhook principal...');
+                    await axios.post(N8N_WEBHOOK_URL, payload);
+                    console.log('DEBUG: Payload de lead enviado para n8n com sucesso.');
+                } catch (error) {
+                    console.error('DEBUG: Erro ao enviar payload de lead para n8n:', error.message);
+                    // Considere um mecanismo de retry ou fila de mensagens aqui para maior robustez                    
+                }
             }
+
 
         } catch (error) {
             console.error('❌ Erro no processamento da mensagem:', error.message);
