@@ -49,6 +49,13 @@ const QR_SERVICE_URL = process.env.QR_SERVICE_URL || 'https://qr-code-viewer-doc
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'https://vivya.app.n8n.cloud/webhook-test/56816120-1928-4e36-9e36-7dfdf5277260';
 
 /**
+ * URL do webhook do n8n para processar mensagens.
+ * Ajuste conforme seu webhook do n8n.
+ * @type {string}
+ */
+const N8N_HUMAN_TAKEOVER_WEBHOOK_URL = process.env.N8N_HUMAN_TAKEOVER_WEBHOOK_URL || 'https://vivya.app.n8n.cloud/webhook/6e50c14a-10eb-47e6-a312-d7b79737de35';
+
+/**
  * URL pública do seu bot.
  * Usada para servir mídia temporariamente. Deve ser acessível externamente.
  * @type {string}
