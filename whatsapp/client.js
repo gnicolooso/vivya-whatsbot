@@ -112,6 +112,24 @@ async function startWhatsAppClient() {
         }
     });
 
+
+    // Listener de teste para o evento 'message_create'
+    client.on('message_create', (message) => {
+        // Apenas para sabermos que o evento foi disparado
+        console.log('✅ --- EVENTO "message_create" DISPARADO! --- ✅');
+        
+        // Log para diferenciar claramente mensagens enviadas vs. recebidas
+        if (message.fromMe) {
+            console.log('DEBUG (message_create): Mensagem ENVIADA PELO AGENTE detectada.');
+        } else {
+            console.log('DEBUG (message_create): Mensagem RECEBIDA DE UM LEAD detectada.');
+        }
+        
+        // Log do objeto completo para análise profunda de suas propriedades
+        console.log(JSON.stringify(message, null, 2));
+        console.log('----------------------------------------------------');
+    });    
+
     // Evento 'message': Disparado ao receber uma nova mensagem.
     client.on('message', async message => {
 
