@@ -114,7 +114,12 @@ async function startWhatsAppClient() {
 
     // Evento 'message': Disparado ao receber uma nova mensagem.
     client.on('message', async message => {
-        // Ignora mensagens enviadas pelo próprio bot, mensagens de status e mensagens de grupo
+
+        console.log('--- NOVA MENSAGEM RECEBIDA ---');
+        console.log(JSON.stringify(message, null, 2)); // O 'null, 2' formata o JSON para fácil leitura
+        console.log('-----------------------------');
+
+        // Ignora mensagens de status e mensagens de grupo
         if (message.isStatus || message.isGroupMsg) return;
 
         try {
@@ -216,7 +221,7 @@ async function startWhatsAppClient() {
                             break;
                     }
                 }
-            } else if (message.type === 'text') { // Mensagem de texto simples
+            } else if (message.type === 'text' || message.type === 'chat') {    // Mensagem de texto simples
                 payload.text.body = message.body;
             } else {
                 // Para tipos de mensagem não reconhecidos ou sem mídia
