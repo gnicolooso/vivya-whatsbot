@@ -216,7 +216,7 @@ async function startWhatsAppClient() {
                             break;
                     }
                 }
-            } else if (message.type === 'chat') { // Mensagem de texto simples
+            } else if (message.type === 'text') { // Mensagem de texto simples
                 payload.text.body = message.body;
             } else {
                 // Para tipos de mensagem não reconhecidos ou sem mídia
