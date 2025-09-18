@@ -116,12 +116,12 @@ async function startWhatsAppClient() {
 
     client.on('message_create', async message => {
 
-        // Mantido: Log de debug detalhado para cada mensagem processada
+        // Log de debug detalhado para cada mensagem processada
         console.log('--- NOVA MENSAGEM CRIADA (message_create) ---');
         console.log(JSON.stringify(message, null, 2));
         console.log('-------------------------------------------');
 
-        // Mantido: Ignora mensagens de status e mensagens de grupo
+        // Ignora mensagens de status e mensagens de grupo
         if (message.isStatus || message.isGroupMsg) return;
 
         try {
@@ -129,17 +129,17 @@ async function startWhatsAppClient() {
             const contact = await message.getContact();
             const botInfo = client.info;
 
-            // Mantido: Inicializa o payload com informações comuns, simulando a estrutura da API do WhatsApp Business
+            // Inicializa o payload com informações comuns, simulando a estrutura da API do WhatsApp Business
             console.log('DEBUG: Inicializa o payload para n8n...');
             const payload = {
-                // Mantido: Informações do bot (simulando algumas variáveis da API do WhatsApp Business)
+                // Informações do bot (simulando algumas variáveis da API do WhatsApp Business)
                 phone_number_id: botInfo.wid.user, // O ID do número do bot
                 display_phone_number: botInfo.pushname || botInfo.wid.user, // Nome do perfil do bot ou ID
 
-                // Mantido: Informações do remetente
+                // Informações do remetente
                 from: message.from.split('@')[0], // Número de telefone do remetente. Remove o "@c.us" do final
                 
-                // Adicionado: Informação do destinatário, crucial para mensagens 'fromMe'
+                // Informação do destinatário, crucial para mensagens 'fromMe'
                 to: message.to.split('@')[0], 
                 
                 contacts: {
@@ -149,15 +149,15 @@ async function startWhatsAppClient() {
                 },
                 is_group: chat.isGroup,
 
-                // Adicionado: Campo 'from_me' explícito para facilitar a lógica no n8n
+                // Campo 'from_me' explícito para facilitar a lógica no n8n
                 from_me: message.fromMe, 
 
-                // Mantido: Informações da mensagem
+                // Informações da mensagem
                 message_id: message.id.id, // ID único da mensagem
                 timestamp: message.timestamp, // Carimbo de data/hora da mensagem
                 message_type: message.type, // Tipo da mensagem (text, image, video, audio, document, sticker, location, etc.)
 
-                // Mantido: Objetos para conteúdo específico, inicializados vazios
+                // Objetos para conteúdo específico, inicializados vazios
                 text: {},
                 audio: {},
                 video: {},
@@ -165,7 +165,7 @@ async function startWhatsAppClient() {
                 document: {},
             };
 
-            // Mantido: Processamento da mídia (lógica 100% preservada)
+            // Processamento da mídia (lógica 100% preservada)
             if (message.hasMedia) {
                 const media = await message.downloadMedia();
 
@@ -197,42 +197,37 @@ async function startWhatsAppClient() {
                             break;
                     }
                 }
-            } else if (message.type === 'text' || message.type === 'chat') { // Mantido: Lógica corrigida para texto
+            } else if (message.type === 'text' || message.type === 'chat') { // Lógica corrigida para texto
                 payload.text.body = message.body;
             } else {
-                // Mantido: Para tipos de mensagem não reconhecidos ou sem mídia
+                // Para tipos de mensagem não reconhecidos ou sem mídia
                 payload.unknown_message_data = message;
                 console.log(`⚠️ Tipo de mensagem não tratado: ${message.type}`);
             }
 
-            // Mantido: Lógica de roteamento para o webhook correto
+            // Lógica de roteamento para o webhook correto
             if (message.fromMe) {
-                // Se a mensagem veio do nosso número (agente humano), chame o webhook de controle
-                try {
-                    // #################### DEBUG ADICIONAL ####################
-                    // Vamos verificar o conteúdo das variáveis de URL antes de usá-las
-                    console.log('DEBUG: Verificando URL do Agente Humano:', N8N_HUMAN_TAKEOVER_WEBHOOK_URL);
-                    console.log('DEBUG: Verificando URL do Lead (para comparação):', N8N_WEBHOOK_URL);
-                    // #######################################################
-                    console.log('DEBUG: Mensagem de agente humano detectada. Enviando para o webhook de controle...');
-                    await axios.post(N8N_HUMAN_TAKEOVER_WEBHOOK_URL, payload);
-                    console.log('DEBUG: Payload de agente humano enviado para n8n com sucesso.');
-                } catch (error) {
-                    console.error('DEBUG: Erro ao enviar payload de agente humano para n8n:', error.message);
+                    // Se a mensagem foi ENVIADA, sempre chame o webhook de controle humano
+                    try {
+                        console.log('AGENT/BOT ACTION -> Enviando para webhook de controle...');
+                        await axios.post(N8N_HUMAN_TAKEOVER_WEBHOOK_URL, payload);
+                        console.log('AGENT/BOT ACTION -> Payload enviado com sucesso.');
+                    } catch (error) {
+                        console.error('AGENT/BOT ACTION -> Erro ao enviar payload:', error.message);
+                    }
+                } else {
+                    // Se a mensagem foi RECEBIDA, chame o webhook principal de leads
+                    // (Esta parte não muda)
+                    try {
+                        console.log('LEAD ACTION -> Enviando para webhook principal...');
+                        await axios.post(N8N_WEBHOOK_URL, payload);
+                        console.log('LEAD ACTION -> Payload enviado com sucesso.');
+                    } catch (error) {
+                        console.error('LEAD ACTION -> Erro ao enviar payload:', error.message);
+                    }
                 }
-            } else {
-                // Se a mensagem veio de um lead, chame o webhook principal
-                try {
-                    console.log('DEBUG: Mensagem de lead detectada. Enviando para o webhook principal...');
-                    await axios.post(N8N_WEBHOOK_URL, payload);
-                    console.log('DEBUG: Payload de lead enviado para n8n com sucesso.');
-                } catch (error) {
-                    console.error('DEBUG: Erro ao enviar payload de lead para n8n:', error.message);
-                }
-            }
-
         } catch (error) {
-            // Mantido: Tratamento de erro geral
+            // Tratamento de erro geral
             console.error('❌ Erro no processamento de "message_create":', error.message);
         }
     });

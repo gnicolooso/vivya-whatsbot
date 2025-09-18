@@ -180,6 +180,9 @@ router.post('/api/send-whatsapp-message', checkBotConnection, async (req, res) =
 
     const client = getWhatsAppClient();
     try {
+        // ALTERAÇÃO: Declaramos uma variável para armazenar a mensagem após o envio.
+        let sentMessage;
+
         if (mediaType && mediaUrl) {
             // Validação básica da URL para mitigar SSRF (Server-Side Request Forgery)
             // Em um ambiente de produção, considere uma validação mais robusta e uma lista de permissões.
@@ -196,19 +199,22 @@ router.post('/api/send-whatsapp-message', checkBotConnection, async (req, res) =
                 case 'image':
                 case 'video':
                 case 'document':
-                    await client.sendMessage(to, media, options);
+                    // ALTERAÇÃO: Capturamos o retorno da função para obter o objeto da mensagem.
+                    sentMessage = await client.sendMessage(to, media, options);
                     console.log(`✅ ${mediaType} enviado para ${to} da URL: ${mediaUrl}`);
                     break;
                 case 'audio':
                 case 'ptt':
                     options.sendAudioAsVoice = true; // Envia áudio como gravação de voz
-                    await client.sendMessage(to, media, options);
+                    // ALTERAÇÃO: Capturamos o retorno da função.
+                    sentMessage = await client.sendMessage(to, media, options);
                     console.log(`✅ Áudio (PTT) enviado para ${to} da URL: ${mediaUrl}`);
                     break;
                 default:
                     console.warn(`⚠️ Tipo de mídia desconhecido: ${mediaType}. Tentando enviar como mensagem de texto.`);
                     if (message) {
-                        await client.sendMessage(to, message);
+                        // ALTERAÇÃO: Capturamos o retorno da função.
+                        sentMessage = await client.sendMessage(to, message);
                         console.log(`✅ Mensagem de texto enviada para ${to}: ${message}`);
                     } else {
                         // Se o tipo de mídia é desconhecido e não há mensagem de texto, retorna erro.
@@ -217,11 +223,18 @@ router.post('/api/send-whatsapp-message', checkBotConnection, async (req, res) =
             }
         } else if (message) {
             // Envio de mensagem de texto simples
-            await client.sendMessage(to, message);
+            // ALTERAÇÃO: Capturamos o retorno da função.
+            sentMessage = await client.sendMessage(to, message);
             console.log(`✅ Mensagem de texto enviada para ${to}: ${message}`);
         }
 
-        res.status(200).json({ success: true, message: 'Mensagem enviada com sucesso.' });
+        // ALTERAÇÃO PRINCIPAL: A resposta de sucesso agora inclui o objeto da mensagem enviada.
+        res.status(200).json({
+            success: true,
+            message: 'Mensagem enviada com sucesso.',
+            sentMessage: sentMessage // O n8n receberá este objeto com todos os detalhes, incluindo o ID.
+        });
+
     } catch (error) {
         console.error(`❌ Erro ao enviar mensagem para ${to}:`, error.message);
         // Verifica se o erro é devido a um chat não encontrado ou ID inválido
