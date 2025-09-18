@@ -8,6 +8,15 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { CLIENT_ID, SESSION_DIR, CLIENT_SESSION_DIR, QR_SERVICE_URL, N8N_WEBHOOK_URL, N8N_HUMAN_TAKEOVER_WEBHOOK_URL, PUBLIC_URL, MEDIA_DIR } = require('../config');
 const { pathExists } = require('../utils/fsUtils'); // Importa a função utilitária
+const IGNORED_MESSAGE_TYPES = new Set([
+            'e2e_notification',
+            'call_log',
+            'gp2',
+            'notification',
+            'notification_template',
+            'revoked',
+            'protocol'
+        ]);
 
 /**
  * @file Gerencia a inicialização, eventos e estado do cliente WhatsApp-web.js. 
@@ -114,6 +123,8 @@ async function startWhatsAppClient() {
 
     // Evento 'message_create': Disparado para QUALQUER nova mensagem (recebida ou enviada).
 
+
+
     client.on('message_create', async message => {
 
         // Log de debug detalhado para cada mensagem processada
@@ -121,8 +132,11 @@ async function startWhatsAppClient() {
         console.log(JSON.stringify(message, null, 2));
         console.log('-------------------------------------------');
 
-        // Ignora mensagens de status e mensagens de grupo
-        if (message.isStatus || message.isGroupMsg) return;
+        // Ignora mensagens dos tipos abaixo  
+        if (message.isStatus || message.isGroupMsg || IGNORED_MESSAGE_TYPES.has(message.type)) {
+            console.log(`INFO: Mensagem ignorada. Tipo: ${message.type}, Status: ${message.isStatus}, Grupo: ${message.isGroupMsg}`);
+            return;
+        }        
 
         try {
             const chat = await message.getChat();
