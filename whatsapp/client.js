@@ -127,6 +127,14 @@ async function startWhatsAppClient() {
 
     client.on('message_create', async message => {
 
+        // Se o bot ainda não estiver totalmente conectado (o evento 'ready' não disparou),
+        // ele ignora a mensagem para evitar o crash.
+        if (!isClientConnected || !client.info) {
+            console.warn(`⚠️ MENSAGEM IGNORADA: O bot recebeu uma mensagem antes de estar totalmente pronto. Isso é normal durante a inicialização.`);
+            return;
+        }
+
+
         // Log de debug detalhado para cada mensagem processada
         console.log('--- NOVA MENSAGEM CRIADA (message_create) ---');
         console.log(JSON.stringify(message, null, 2));
