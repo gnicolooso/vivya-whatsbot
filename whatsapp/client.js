@@ -205,7 +205,8 @@ async function startWhatsAppClient() {
                             payload.audio = { mime_type: media.mimetype, filename: message._data?.filename || filename, url: mediaUrl };
                             break;
                         case 'image':
-                            payload.image = { mime_type: media.mimetype, filename: message.caption || message._data?.filename || filename, url: mediaUrl };
+                            payload.image = { mime_type: media.mimetype, filename: message.body || message.filename || message._data?.filename || filename, url: mediaUrl };
+                            
                             break;
                         case 'video':
                             payload.video = { mime_type: media.mimetype, filename: message.caption || message._data?.filename || filename, url: mediaUrl };
@@ -217,6 +218,10 @@ async function startWhatsAppClient() {
                             payload.other_media = { mime_type: media.mimetype, filename: message._data?.filename || filename, url: mediaUrl };
                             console.log(`⚠️ Tipo de mídia não tratado especificamente: ${message.type}`);
                             break;
+                    }
+                    // Se houver texto na mensagem (que é a legenda da mídia), coloque-o no payload.text
+                    if (message.body && message.body.length > 0) {
+                        payload.text.body = message.body;
                     }
                 }
             } else if (message.type === 'text' || message.type === 'chat') { // Lógica corrigida para texto
