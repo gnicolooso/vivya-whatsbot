@@ -198,24 +198,24 @@ async function startWhatsAppClient() {
                     await fs.writeFile(fullPath, Buffer.from(media.data, 'base64'));
                     console.log(`💾 Mídia salva localmente: ${fullPath}`);
                     const mediaUrl = `${PUBLIC_URL}/media/${filename}`;
+                    const mediaData = { mime_type: media.mimetype, filename: message.filename || message._data?.filename || filename, url: mediaUrl };
 
                     switch (message.type) {
                         case 'audio':
                         case 'ptt':
-                            payload.audio = { mime_type: media.mimetype, filename: message._data?.filename || filename, url: mediaUrl };
+                            payload.audio = mediaData;
                             break;
                         case 'image':
-                            payload.image = { mime_type: media.mimetype, message._data?.filename || filename, url: mediaUrl };
-                            console.log(`Legenda da imagem: ${message.body}`); // Retorna a legenda, se houver
+                            payload.image = mediaData;                            
                             break;
                         case 'video':
-                            payload.video = { mime_type: media.mimetype, filename: message.caption || message._data?.filename || filename, url: mediaUrl };
+                            payload.video = mediaData;
                             break;
                         case 'document':
-                            payload.document = { mime_type: media.mimetype, filename: message.filename || message._data?.filename || filename, url: mediaUrl };
+                            payload.document = mediaData;
                             break;
                         default:
-                            payload.other_media = { mime_type: media.mimetype, filename: message._data?.filename || filename, url: mediaUrl };
+                            payload.other_media = mediaData;
                             console.log(`⚠️ Tipo de mídia não tratado especificamente: ${message.type}`);
                             break;
                     }
