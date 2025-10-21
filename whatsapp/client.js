@@ -206,7 +206,7 @@ async function startWhatsAppClient() {
                             break;
                         case 'image':
                             payload.image = { mime_type: media.mimetype, filename: message.body || message.filename || message._data?.filename || filename, url: mediaUrl };
-                            
+                            console.log(`Legente da imagem: ${message.body}`); // Retorna a legenda, se houver
                             break;
                         case 'video':
                             payload.video = { mime_type: media.mimetype, filename: message.caption || message._data?.filename || filename, url: mediaUrl };
