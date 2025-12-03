@@ -66,10 +66,10 @@ async function startWhatsAppClient() {
         // Usa LocalAuth com o CLIENT_ID fixo e o dataPath apontando para a raiz do volume
         authStrategy: new LocalAuth({ clientId: CLIENT_ID, dataPath: SESSION_DIR }),
 
-        webVersionCache: {
-            type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2424.6.html',
-        },        
+        //webVersionCache: {
+        //    type: 'remote',
+        //    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2424.6.html',
+        //},        
 
         puppeteer: {
             headless: true, // Modo headless (sem interface gráfica)
@@ -148,7 +148,18 @@ async function startWhatsAppClient() {
 
         try {
             const chat = await message.getChat();
-            const contact = await message.getContact();
+
+            let contact;
+            try {
+                // Tenta pegar o contato. Se falhar (erro do window.Store...), usa um fallback.
+                contact = await message.getContact();
+            } catch (err) {
+                console.warn(`⚠️ Aviso: Não foi possível recuperar detalhes do contato (Erro de versão do WA). Usando valores padrão.`);
+                // Cria um objeto de contato "falso" para o código não quebrar mais abaixo
+                contact = { pushname: '', name: '' };
+            }
+
+
             const botInfo = client.info;
 
             // Inicializa o payload com informações comuns, simulando a estrutura da API do WhatsApp Business
