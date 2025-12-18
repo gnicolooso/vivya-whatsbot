@@ -76,18 +76,22 @@ async function startWhatsAppClient() {
         puppeteer: {
             headless: true,
             args: [
-                '--no-sandbox', 
+                '--no-sandbox',
                 '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage', 
+                '--disable-dev-shm-usage',
                 '--disable-accelerated-2d-canvas',
                 '--no-first-run',
                 '--no-zygote',
-                '--single-process' 
+                '--single-process',
+                '--disable-gpu',
+                // NOVOS ARGUMENTOS ANTI-DETECÇÃO:
+                '--disable-blink-features=AutomationControlled', // CRUCIAL: Esconde que é um robô
+                '--window-size=1280,800' // Define tamanho de tela de um notebook real
             ],
-            // ALTERAÇÃO: User Agent fixo para simular um navegador Windows real e evitar detecção
+            // Mantém o User Agent de um Windows real
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36',
             userDataDir: CLIENT_SESSION_DIR
-        }
+        }        
 
 
     });
