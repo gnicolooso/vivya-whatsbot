@@ -1,9 +1,8 @@
 # nixpacks.toml
 
 [phases.setup]
-# Mantemos a instalação dos pacotes necessários
+# Mantemos as bibliotecas essenciais para o Chrome rodar "saudável" e com fontes
 nixPkgs = [
-    "chromium",
     "nss",
     "freetype",
     "harfbuzz",
@@ -12,6 +11,6 @@ nixPkgs = [
 ]
 
 [variables]
-# Dizemos ao Puppeteer para NÃO baixar o navegador dele (pois vamos usar o do sistema)
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
-
+# REMOVIDO: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
+# REMOVIDO: PUPPETEER_EXECUTABLE_PATH
+# Deixamos o Puppeteer gerenciar o binário, mas usando as libs acima.

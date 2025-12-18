@@ -1,5 +1,4 @@
 // whatsapp/client.js
-const { execSync } = require('child_process');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
@@ -62,21 +61,6 @@ async function startWhatsAppClient() {
     isBotInitializing = true;
     isClientConnected = false; // Resetar o status ao iniciar
 
-
-    // --- LÓGICA DE DETECÇÃO DO NAVEGADOR ---
-    let executablePath;
-    try {
-        // Pergunta ao Linux onde está o chromium
-        console.log('🔍 Buscando executável do Chromium no sistema...');
-        executablePath = execSync('which chromium').toString().trim();
-        console.log(`✅ Chromium encontrado em: ${executablePath}`);
-    } catch (err) {
-        console.error('❌ Chromium não encontrado no PATH. O bot tentará usar o padrão ou falhará.');
-        // Se falhar, deixamos undefined para o Puppeteer tentar se virar
-    }
-    // ---------------------------------------
-
-
     console.log('🟢 Inicializando cliente WhatsApp Web...');
     client = new Client({
         // Usa LocalAuth com o CLIENT_ID fixo e o dataPath apontando para a raiz do volume
@@ -109,9 +93,12 @@ async function startWhatsAppClient() {
         } */       
 
         puppeteer: {
-            // Usa o caminho descoberto dinamicamente
-            executablePath: executablePath, 
+            // executablePath: REMOVIDO -> Deixa o Puppeteer usar o bundled compatível
             headless: true,
+            
+            // CRUCIAL: Remove flags internas que entregam a automação
+            ignoreDefaultArgs: ['--enable-automation'], 
+            
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -120,9 +107,16 @@ async function startWhatsAppClient() {
                 '--no-first-run',
                 '--no-zygote',
                 '--single-process',
-                '--disable-gpu'
+                '--disable-gpu',
+                
+                // Flags de Furtividade (Anti-Detecção)
+                '--disable-blink-features=AutomationControlled', 
+                '--window-size=1280,800',
+                '--disable-infobars', // Remove barras de notificação
+                '--hide-scrollbars'
             ],
-            // Mantém o User Agent do Windows 10
+            
+            // User Agent de Windows 10 (Finge ser Desktop)
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36',
             userDataDir: CLIENT_SESSION_DIR
         }
