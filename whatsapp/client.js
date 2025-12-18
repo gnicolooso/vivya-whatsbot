@@ -73,7 +73,7 @@ async function startWhatsAppClient() {
         //},        
 
 
-        puppeteer: {
+        /*puppeteer: {
             headless: true,
             args: [
                 '--no-sandbox',
@@ -91,7 +91,27 @@ async function startWhatsAppClient() {
             // Mantém o User Agent de um Windows real
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36',
             userDataDir: CLIENT_SESSION_DIR
-        }        
+        } */       
+
+        puppeteer: {
+            // Usa o caminho definido no nixpacks.toml ou o padrão do sistema
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+            headless: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process',
+                '--disable-gpu'
+            ],
+            // Mantemos o User Agent de Windows para "casar" com a robustez do navegador nativo
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36',
+            userDataDir: CLIENT_SESSION_DIR
+        }
+        
 
 
     });
