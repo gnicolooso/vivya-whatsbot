@@ -1,5 +1,5 @@
 // whatsapp/client.js
-
+const { execSync } = require('child_process');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
@@ -62,6 +62,21 @@ async function startWhatsAppClient() {
     isBotInitializing = true;
     isClientConnected = false; // Resetar o status ao iniciar
 
+
+    // --- LÓGICA DE DETECÇÃO DO NAVEGADOR ---
+    let executablePath;
+    try {
+        // Pergunta ao Linux onde está o chromium
+        console.log('🔍 Buscando executável do Chromium no sistema...');
+        executablePath = execSync('which chromium').toString().trim();
+        console.log(`✅ Chromium encontrado em: ${executablePath}`);
+    } catch (err) {
+        console.error('❌ Chromium não encontrado no PATH. O bot tentará usar o padrão ou falhará.');
+        // Se falhar, deixamos undefined para o Puppeteer tentar se virar
+    }
+    // ---------------------------------------
+
+
     console.log('🟢 Inicializando cliente WhatsApp Web...');
     client = new Client({
         // Usa LocalAuth com o CLIENT_ID fixo e o dataPath apontando para a raiz do volume
@@ -94,8 +109,8 @@ async function startWhatsAppClient() {
         } */       
 
         puppeteer: {
-            // Usa o caminho definido no nixpacks.toml ou o padrão do sistema
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+            // Usa o caminho descoberto dinamicamente
+            executablePath: executablePath, 
             headless: true,
             args: [
                 '--no-sandbox',
@@ -107,11 +122,10 @@ async function startWhatsAppClient() {
                 '--single-process',
                 '--disable-gpu'
             ],
-            // Mantemos o User Agent de Windows para "casar" com a robustez do navegador nativo
+            // Mantém o User Agent do Windows 10
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36',
             userDataDir: CLIENT_SESSION_DIR
         }
-        
 
 
     });

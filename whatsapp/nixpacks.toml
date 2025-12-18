@@ -1,8 +1,7 @@
 # nixpacks.toml
-# Configuração para instalar o Chromium Nativo no Railway
 
 [phases.setup]
-# Instala o Chromium e bibliotecas gráficas/fontes essenciais para evitar detecção
+# Mantemos a instalação dos pacotes necessários
 nixPkgs = [
     "chromium",
     "nss",
@@ -13,7 +12,6 @@ nixPkgs = [
 ]
 
 [variables]
-# Diz ao Puppeteer para NÃO baixar o navegador embutido (economiza espaço e tempo)
+# Dizemos ao Puppeteer para NÃO baixar o navegador dele (pois vamos usar o do sistema)
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
-# Define onde o navegador nativo está instalado
-PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium"
+
