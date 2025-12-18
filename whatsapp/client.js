@@ -72,22 +72,24 @@ async function startWhatsAppClient() {
         //    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2424.6.html',
         //},        
 
+
         puppeteer: {
-            headless: true, // Modo headless (sem interface gráfica)
+            headless: true,
             args: [
-                '--no-sandbox', // Essencial para ambientes Docker
+                '--no-sandbox', 
                 '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage', // Útil em ambientes Docker com memória limitada
+                '--disable-dev-shm-usage', 
                 '--disable-accelerated-2d-canvas',
                 '--no-first-run',
                 '--no-zygote',
-                '--single-process' // Útil para economia de recursos
+                '--single-process' 
             ],
-            // userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36'
-            // Opcional: Especificar o caminho do userDataDir explicitamente pode ajudar
-            // Isso força o Puppeteer a usar a pasta exata do CLIENT_SESSION_DIR
+            // ALTERAÇÃO: User Agent fixo para simular um navegador Windows real e evitar detecção
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36',
             userDataDir: CLIENT_SESSION_DIR
         }
+
+
     });
 
     // --- Configuração de Eventos do Cliente WhatsApp ---
