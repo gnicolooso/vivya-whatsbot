@@ -30,13 +30,17 @@ async function ensureCriticalDirectoriesExist() {
         }
 
         // 2. Garantir o diretório específico do cliente
-        if (!(await pathExists(CLIENT_SESSION_DIR))) {
-            console.log(`[INIT] Criando diretório específico do cliente: ${CLIENT_SESSION_DIR}`);
-            await fs.mkdir(CLIENT_SESSION_DIR, { recursive: true });
-            console.log(`[INIT] Diretório ${CLIENT_SESSION_DIR} criado.`);
-        } else {
-            console.log(`[INIT] Diretório específico do cliente ${CLIENT_SESSION_DIR} já existe.`);
+        // MODO RECOVERY: Verifica se existe e APAGA para forçar uma sessão limpa
+        if (await pathExists(CLIENT_SESSION_DIR)) {
+            console.warn(`☢️ [INIT] MODO RECOVERY: Apagando sessão atual (${CLIENT_ID}) para corrigir falhas de conexão...`);
+            await fs.rm(CLIENT_SESSION_DIR, { recursive: true, force: true });
+            console.log(`✅ [INIT] Sessão antiga removida. Um novo QR Code será gerado.`);
         }
+
+        // Agora cria a pasta limpa
+        console.log(`[INIT] Criando diretório específico do cliente: ${CLIENT_SESSION_DIR}`);
+        await fs.mkdir(CLIENT_SESSION_DIR, { recursive: true });
+        console.log(`[INIT] Diretório ${CLIENT_SESSION_DIR} criado.`);
 
         // 3. Garantir o diretório de mídia
         if (!(await pathExists(MEDIA_DIR))) {

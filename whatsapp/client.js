@@ -26,6 +26,7 @@ const IGNORED_MESSAGE_TYPES = new Set([
 let client; // Variável para a instância do cliente WhatsApp
 let isBotInitializing = false; // Flag para evitar inicializações múltiplas
 let isClientConnected = false; // Flag de status de conexão do bot
+let lastReadyTimestamp = 0; // Variável para controle de Debounce do evento 'ready' 
 
 /**
  * Obtém a instância global do cliente WhatsApp.
@@ -108,6 +109,15 @@ async function startWhatsAppClient() {
 
     // Evento 'ready': Disparado quando o cliente está pronto e autenticado.
     client.on('ready', async () => {
+
+        const now = Date.now();
+        // Se o evento disparar novamente em menos de 5 segundos, ignoramos.
+        if (now - lastReadyTimestamp < 5000) {
+            console.log('🟡 Evento ready duplicado detectado e ignorado (Debounce).');
+            return;
+        }
+        lastReadyTimestamp = now;
+
         console.log('✅ Cliente conectado ao WhatsApp!');
         isBotInitializing = false; // Resetar flag após conexão bem-sucedida
         isClientConnected = true; // Definir como TRUE!
