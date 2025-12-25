@@ -1,17 +1,13 @@
 // whatsapp/client.js
 
-const { Client, LocalAuth } = require('whatsapp-web.js');
-// --- AUDITORIA DE VERSÃO ---
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 try {
     const pkg = require('whatsapp-web.js/package.json');
     console.log(`🔍 AUDITORIA: Versão real do whatsapp-web.js no disco: ${pkg.version}`);
 } catch (e) {
     console.log('🔍 AUDITORIA: Não foi possível ler a versão do pacote.');
 }
-// ---------------------------
 
-
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 const fs = require('fs').promises; // Usando a versão de Promises do módulo 'fs'
