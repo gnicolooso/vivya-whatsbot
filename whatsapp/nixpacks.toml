@@ -1,7 +1,7 @@
 # nixpacks.toml
 
 [phases.setup]
-# Mantemos as bibliotecas essenciais para o Chrome rodar "saudável" e com fontes
+# Mantemos as bibliotecas essenciais para o Chrome rodar
 nixPkgs = [
     "nss",
     "freetype",
@@ -10,7 +10,9 @@ nixPkgs = [
     "ttf-freefont"
 ]
 
-[variables]
-# REMOVIDO: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
-# REMOVIDO: PUPPETEER_EXECUTABLE_PATH
-# Deixamos o Puppeteer gerenciar o binário, mas usando as libs acima.
+[phases.install]
+# ALTERAÇÃO CRÍTICA:
+# Substituímos o padrão "npm ci" por "npm install".
+# Isso força a atualização das dependências (Puppeteer e wwebjs)
+# ignorando o conflito com o arquivo de bloqueio antigo.
+cmds = ["npm install"]
