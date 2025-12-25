@@ -19,6 +19,6 @@
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "uuid": "^11.1.0",
-    "whatsapp-web.js": "npm:wwebjs-dev@latest"
+    "whatsapp-web.js": "npm:wwebjs-dev@1.34.3"
   }
 }
