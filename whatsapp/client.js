@@ -1,4 +1,16 @@
 // whatsapp/client.js
+
+const { Client, LocalAuth } = require('whatsapp-web.js');
+// --- AUDITORIA DE VERSÃO ---
+try {
+    const pkg = require('whatsapp-web.js/package.json');
+    console.log(`🔍 AUDITORIA: Versão real do whatsapp-web.js no disco: ${pkg.version}`);
+} catch (e) {
+    console.log('🔍 AUDITORIA: Não foi possível ler a versão do pacote.');
+}
+// ---------------------------
+
+
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
@@ -21,6 +33,9 @@ const IGNORED_MESSAGE_TYPES = new Set([
  * @file Gerencia a inicialização, eventos e estado do cliente WhatsApp-web.js. 
  * Centraliza toda a lógica de interação com a biblioteca do WhatsApp.
  */
+
+
+
 
 let client; // Variável para a instância do cliente WhatsApp
 let isBotInitializing = false; // Flag para evitar inicializações múltiplas
