@@ -12,8 +12,7 @@ const { QR_SERVICE_URL } = require('../config');
 
 const router = express.Router();
 
-/** 
- * Middleware para verificar se o bot está conectado antes de processar requisições que dependem dele.
+/** * Middleware para verificar se o bot está conectado antes de processar requisições que dependem dele.
  * @param {object} req - Objeto de requisição do Express.
  * @param {object} res - Objeto de resposta do Express.
  * @param {function} next - Função para passar para o próximo middleware.
@@ -158,7 +157,7 @@ router.post('/api/clear-chat-state', checkBotConnection, async (req, res) => {
 });
 
 /**
- * Endpoint para enviar mensagens de WhatsApp (texto ou mídia).
+ * Endpoint para enviar mensagens de WhatsApp (texto ou mídia) - VERSÃO BLINDADA
  * POST /api/send-whatsapp-message
  * @param {string} to - O número de destino (ex: '55119XXXXXXXX@c.us').
  * @param {string} [message] - O texto da mensagem (obrigatório se não houver mídia).
@@ -169,80 +168,112 @@ router.post('/api/clear-chat-state', checkBotConnection, async (req, res) => {
  */
 router.post('/api/send-whatsapp-message', checkBotConnection, async (req, res) => {
     const { to, message, mediaType, mediaUrl, caption, filename } = req.body;
+    const client = getWhatsAppClient();
 
+    // Validação básica de entrada
     if (!to) {
         return res.status(400).json({ error: 'Parâmetro "to" é obrigatório.' });
     }
-    // Verifica se pelo menos uma mensagem de texto ou mídia foi fornecida
     if (!message && (!mediaType || !mediaUrl)) {
         return res.status(400).json({ error: 'Nenhuma mensagem de texto ou mídia fornecida para enviar.' });
     }
 
-    const client = getWhatsAppClient();
     try {
-        // ALTERAÇÃO: Declaramos uma variável para armazenar a mensagem após o envio.
-        let sentMessage;
+        console.log(`📨 [API] Tentando enviar mensagem para: ${to}`);
+
+        // --- 1. SANITIZAÇÃO E NORMALIZAÇÃO DE NÚMERO ---
+        // Remove caracteres não numéricos para evitar erros de formatação
+        let cleanNumber = to.replace(/\D/g, '');
+        // Adiciona o sufixo @c.us se não houver @ (assume envio pessoal, não grupo)
+        // Se o usuário mandou um ID de grupo (termina em @g.us), mantemos como está.
+        let finalId = to.includes('@') ? to : `${cleanNumber}@c.us`;
+
+        // --- 2. VALIDAÇÃO DE REGISTRO (CRUCIAL PARA CORRIGIR ERRO 'markedUnread') ---
+        // O erro ocorre porque o objeto Chat não está hidratado na memória.
+        // getNumberId força uma consulta ao servidor, o que ajuda a sincronizar o contato.
+        try {
+            // Só validamos se não for grupo (grupos precisam do ID exato)
+            if (!finalId.includes('@g.us')) {
+                const verifiedUser = await client.getNumberId(finalId);
+                if (verifiedUser) {
+                    finalId = verifiedUser._serialized; // Usa o ID oficial retornado pelo WhatsApp
+                    console.log(`✅ [API] Número verificado e normalizado: ${finalId}`);
+                } else {
+                    console.warn(`⚠️ [API] Número não registrado no WhatsApp: ${finalId}. Tentando envio forçado...`);
+                }
+            }
+        } catch (err) {
+            console.warn('⚠️ [API] Falha ao verificar registro do número (prosseguindo sem verificação):', err.message);
+        }
+
+        // --- 3. PREPARAÇÃO DO CONTEÚDO (MÍDIA OU TEXTO) ---
+        let content;
+        let options = {};
+
+        // Se houver legenda ou nome de arquivo, adiciona nas opções
+        if (caption) options.caption = caption;
+        if (filename) options.filename = filename;
 
         if (mediaType && mediaUrl) {
-            // Validação básica da URL para mitigar SSRF (Server-Side Request Forgery)
-            // Em um ambiente de produção, considere uma validação mais robusta e uma lista de permissões.
+            // Validação de segurança da URL
             if (!mediaUrl.startsWith('http://') && !mediaUrl.startsWith('https://')) {
                 return res.status(400).json({ error: 'URL de mídia inválida. Deve começar com http:// ou https://' });
             }
 
-            const media = await MessageMedia.fromUrl(mediaUrl);
-            let options = {};
-            if (caption) options.caption = caption;
-            if (filename) options.filename = filename;
+            try {
+                console.log(`📥 [API] Baixando mídia de: ${mediaUrl}`);
+                const media = await MessageMedia.fromUrl(mediaUrl, { unsafeMime: true });
+                content = media; // O conteúdo principal será o objeto de mídia
 
-            switch (mediaType) {
-                case 'image':
-                case 'video':
-                case 'document':
-                    // ALTERAÇÃO: Capturamos o retorno da função para obter o objeto da mensagem.
-                    sentMessage = await client.sendMessage(to, media, options);
-                    console.log(`✅ ${mediaType} enviado para ${to} da URL: ${mediaUrl}`);
-                    break;
-                case 'audio':
-                case 'ptt':
-                    options.sendAudioAsVoice = true; // Envia áudio como gravação de voz
-                    // ALTERAÇÃO: Capturamos o retorno da função.
-                    sentMessage = await client.sendMessage(to, media, options);
-                    console.log(`✅ Áudio (PTT) enviado para ${to} da URL: ${mediaUrl}`);
-                    break;
-                default:
-                    console.warn(`⚠️ Tipo de mídia desconhecido: ${mediaType}. Tentando enviar como mensagem de texto.`);
-                    if (message) {
-                        // ALTERAÇÃO: Capturamos o retorno da função.
-                        sentMessage = await client.sendMessage(to, message);
-                        console.log(`✅ Mensagem de texto enviada para ${to}: ${message}`);
-                    } else {
-                        // Se o tipo de mídia é desconhecido e não há mensagem de texto, retorna erro.
-                        return res.status(400).json({ error: 'Tipo de mídia não suportado e nenhuma mensagem de texto fornecida.' });
-                    }
+                // Ajustes específicos por tipo de mídia
+                if (mediaType === 'audio' || mediaType === 'ptt') {
+                    options.sendAudioAsVoice = true; // Envia como nota de voz (PTT)
+                }
+            } catch (mediaError) {
+                console.error('❌ [API] Erro ao baixar mídia:', mediaError.message);
+                return res.status(400).json({ error: 'Falha ao processar a URL de mídia.', details: mediaError.message });
             }
-        } else if (message) {
-            // Envio de mensagem de texto simples
-            // ALTERAÇÃO: Capturamos o retorno da função.
-            sentMessage = await client.sendMessage(to, message);
-            console.log(`✅ Mensagem de texto enviada para ${to}: ${message}`);
+        } else {
+            // Se não for mídia, é texto puro
+            content = message;
         }
 
-        // ALTERAÇÃO PRINCIPAL: A resposta de sucesso agora inclui o objeto da mensagem enviada.
-        res.status(200).json({
+        // --- 4. ENVIO ROBUSTO (TRY-CATCH DUPLO) ---
+        let sentMessage;
+        try {
+            // TENTATIVA A: Envio Direto (Padrão)
+            sentMessage = await client.sendMessage(finalId, content, options);
+        } catch (sendError) {
+            console.warn(`⚠️ [API] Erro no envio padrão (${sendError.message}). Tentando método alternativo via Chat Object...`);
+            
+            // TENTATIVA B: Envio via Objeto Chat (Bypass para erro 'markedUnread' e 'undefined')
+            // Isso força a biblioteca a instanciar o chat explicitamente antes de enviar.
+            const chat = await client.getChatById(finalId);
+            sentMessage = await chat.sendMessage(content, options);
+        }
+
+        console.log(`🚀 [API] Mensagem enviada com sucesso! ID: ${sentMessage.id.id}`);
+
+        // Resposta de sucesso completa
+        return res.status(200).json({
             success: true,
             message: 'Mensagem enviada com sucesso.',
-            sentMessage: sentMessage // O n8n receberá este objeto com todos os detalhes, incluindo o ID.
+            sentMessage: sentMessage // Retorna o objeto completo para o n8n
         });
 
     } catch (error) {
-        console.error(`❌ Erro ao enviar mensagem para ${to}:`, error.message);
-        // Verifica se o erro é devido a um chat não encontrado ou ID inválido
-        if (error.message.includes('No chat found')) {
-            res.status(404).json({ success: false, error: 'Chat de destino não encontrado ou inválido.', details: error.message });
-        } else {
-            res.status(500).json({ success: false, error: 'Falha ao enviar mensagem.', details: error.message });
+        console.error(`❌ [API] ERRO CRÍTICO AO ENVIAR PARA ${to}:`, error.message);
+        
+        // Tratamento de erros específicos para feedback melhor
+        if (error.message && error.message.includes('No chat found')) {
+            return res.status(404).json({ success: false, error: 'Chat de destino não encontrado ou inválido.', details: error.message });
         }
+
+        return res.status(500).json({
+            success: false,
+            error: 'Falha crítica ao enviar mensagem.',
+            details: error.message || String(error)
+        });
     }
 });
 
