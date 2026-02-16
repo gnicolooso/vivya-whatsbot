@@ -8,7 +8,7 @@ const fs = require('fs').promises; // Usando a versão de Promises do módulo 'f
 // Importações dos módulos refatorados
 const config = require('./config'); // Módulo de configuração
 const { ensureCriticalDirectoriesExist } = require('./utils/fsUtils'); // Utilitários de sistema de arquivos 
-const { startWhatsAppClient } = require('./whatsapp/client'); // Gerenciamento do cliente WhatsApp
+const { startWppClient } = require('./whatsapp/wppClient');
 const whatsappApiRoutes = require('./routes/whatsappApi'); // Rotas da API do WhatsApp
 
 /**
@@ -41,8 +41,9 @@ async function initializeApp() {
         // Garante que os diretórios de sessão e mídia existam e limpa sessões antigas
         await ensureCriticalDirectoriesExist();
 
-        // Inicia o cliente WhatsApp Web
-        await startWhatsAppClient();
+        // Inicia o cliente
+        await startWppClient();
+
 
         // Inicializa servidor Express na porta correta
         app.listen(config.PORT, () => {

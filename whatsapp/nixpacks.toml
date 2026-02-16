@@ -1,7 +1,6 @@
 # nixpacks.toml
 
 [phases.setup]
-# Mantemos as bibliotecas essenciais para o Chrome rodar
 nixPkgs = [
     "nss",
     "freetype",
@@ -11,8 +10,4 @@ nixPkgs = [
 ]
 
 [phases.install]
-# ALTERAÇÃO CRÍTICA:
-# Substituímos o padrão "npm ci" por "npm install".
-# Isso força a atualização das dependências (Puppeteer e wwebjs)
-# ignorando o conflito com o arquivo de bloqueio antigo.
-cmds = ["npm install"]
+cmds = ["npm install --omit=dev"]
