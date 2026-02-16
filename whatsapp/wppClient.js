@@ -137,64 +137,51 @@ function registerEvents() {
 
 
 async function buildPayload(message) {
+    const isFromMe = message.fromMe;
 
-    if (!message) return null;
+    const from = message.from?.replace('@c.us', '') || null;
+    const to = message.to?.replace('@c.us', '') || null;
 
     const payload = {
-        phone_number_id: message.to?.replace('@c.us', '') || null,
-        from: message.from?.replace('@c.us', '') || null,
-        from_me: message.fromMe || false,
-        message_id: message.id?._serialized || message.id || null,
-        timestamp: message.timestamp || Date.now(),
-        message_type: message.type || 'unknown'
+        phone_number_id: isFromMe ? from : to || from,
+        from: from,
+        from_me: isFromMe,
+        message_id: message.id?.id || message.id || null,
+        timestamp: message.timestamp,
+        message_type: message.type,
+        text: {},
+        image: {},
+        video: {},
+        audio: {},
+        document: {}
     };
 
-    // ========================
-    // TEXTO
-    // ========================
     if (message.type === 'chat' && message.body) {
         payload.text = {
             body: message.body
         };
     }
 
-    // ========================
-    // MÍDIA
-    // ========================
-    const isMedia =
-        message.isMedia ||
-        ['image', 'video', 'document', 'audio'].includes(message.type);
+    if (message.isMedia) {
+        const buffer = await client.decryptFile(message);
+        const extension = message.mimetype?.split('/')[1] || 'bin';
+        const filename = `${Date.now()}-${uuidv4()}.${extension}`;
+        const filePath = path.join(MEDIA_DIR, filename);
 
-    if (isMedia) {
-        try {
+        await fs.writeFile(filePath, buffer);
 
-            const buffer = await client.decryptFile(message);
+        const mediaUrl = `${PUBLIC_URL}/media/${filename}`;
 
-            const extension =
-                message.mimetype?.split('/')[1]?.split(';')[0] || 'bin';
-
-            const filename = `${Date.now()}-${uuidv4()}.${extension}`;
-            const filePath = path.join(MEDIA_DIR, filename);
-
-            await fs.writeFile(filePath, buffer);
-
-            const mediaUrl = `${PUBLIC_URL}/media/${filename}`;
-
-            payload.media = {
-                type: message.type,
-                mime_type: message.mimetype,
-                url: mediaUrl,
-                filename
-            };
-
-        } catch (err) {
-            console.error('❌ Erro ao processar mídia:', err.message);
-            payload.media_error = true;
-        }
+        payload[message.type] = {
+            mime_type: message.mimetype,
+            url: mediaUrl,
+            filename
+        };
     }
 
     return payload;
 }
+
 
 
 async function resetSession() {
