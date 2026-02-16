@@ -80,46 +80,49 @@ async function startWppClient() {
 
 
 function registerEvents() {
-
-    // 🔔 MENSAGENS
     client.onMessage(async (message) => {
+
+        if (message.isGroupMsg) return;
+        if (message.type === 'e2e_notification') return;
+
+        console.log('📩 Nova mensagem recebida:', {
+            from: message.from,
+            fromMe: message.fromMe,
+            type: message.type,
+            body: message.body
+        });
+
         try {
+            const payload = await buildPayload(message);
 
-            // Filtros básicos
-            if (!message) return;
-            if (message.isGroupMsg) return;
-            if (message.type === 'e2e_notification') return;
+            console.log('📦 Payload gerado:', JSON.stringify(payload, null, 2));
 
-            console.log('📩 Nova mensagem recebida:', {
-                from: message.from,
-                fromMe: message.fromMe,
-                type: message.type,
-                body: message.body
-            });
+            // 🔥 VALIDAÇÃO SIMPLES E CORRETA
+            const hasContent =
+                (payload.text && payload.text.body) ||
+                (payload.image && payload.image.url) ||
+                (payload.video && payload.video.url) ||
+                (payload.audio && payload.audio.url) ||
+                (payload.document && payload.document.url);
 
-            const payload = buildPayload(message);
-
-            // 🔥 Proteção contra payload vazio
-            if (!payload || Object.keys(payload).length === 0) {
-                console.warn('⚠️ Payload vazio. Não enviado ao n8n.');
+            if (!hasContent) {
+                console.warn('⚠️ Payload sem conteúdo relevante.');
                 return;
             }
 
-            if (message.fromMe) {
-                await axios.post(N8N_HUMAN_TAKEOVER_WEBHOOK_URL, payload);
-                console.log('🤖 Mensagem enviada para HUMAN TAKEOVER');
-            } else {
-                await axios.post(N8N_WEBHOOK_URL, payload);
-                console.log('🚀 Mensagem enviada para N8N');
-            }
+            const webhookUrl = message.fromMe
+                ? N8N_HUMAN_TAKEOVER_WEBHOOK_URL
+                : N8N_WEBHOOK_URL;
+
+            await axios.post(webhookUrl, payload);
+
+            console.log('🚀 Enviado ao n8n com sucesso');
 
         } catch (err) {
-            console.error('❌ Erro processamento mensagem:', err.response?.data || err.message);
+            console.error('❌ Erro processamento mensagem:', err.message);
         }
     });
 
-
-    // 🔄 STATE CHANGE
     client.onStateChange((state) => {
         console.log('🔄 State change:', state);
 
@@ -129,11 +132,11 @@ function registerEvents() {
         }
 
         if (state === 'UNPAIRED') {
-            console.log('❌ Sessão desconectada (UNPAIRED). Aguardando novo QR...');
-            isConnected = false;
+            console.log('❌ Sessão desconectada (UNPAIRED).');
         }
     });
 }
+
 
 
 async function buildPayload(message) {
@@ -155,6 +158,8 @@ async function buildPayload(message) {
         audio: {},
         document: {}
     };
+
+
 
     if (message.type === 'chat' && message.body) {
         payload.text = {
