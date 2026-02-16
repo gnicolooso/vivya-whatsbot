@@ -60,7 +60,7 @@ async function startWppClient() {
                 await axios.post(`${QR_SERVICE_URL}/api/qr`, { qr: base64Qr });
                 console.log('📲 QR enviado para o microserviço.');
             } catch (err) {
-                console.error('Erro ao enviar QR:', err.message);
+                console.error('Erro ao enviar QR:', err.response?.data || err.message);
             }
         },
 
