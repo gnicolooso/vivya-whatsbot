@@ -39,16 +39,34 @@ async function startWppClient() {
         useChrome: false,
         autoClose: 0,
         disableWelcome: true,
+
+        // 🔥 ESSENCIAL PARA RAILWAY / DOCKER
+        puppeteerOptions: {
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process'
+            ]
+        },
+
         catchQR: async (base64Qr) => {
             const qr = base64Qr.split(',')[1];
 
             try {
                 await axios.post(`${QR_SERVICE_URL}/api/qr`, { qr: base64Qr });
+                console.log('📲 QR enviado para o microserviço.');
             } catch (err) {
                 console.error('Erro ao enviar QR:', err.message);
             }
         },
+
         statusFind: (status) => {
+            console.log('🔎 Status do WPP:', status);
+
             if (status === 'inChat') {
                 isConnected = true;
                 isInitializing = false;
@@ -59,6 +77,7 @@ async function startWppClient() {
 
     registerEvents();
 }
+
 
 function registerEvents() {
     client.onMessage(async (message) => {
