@@ -64,15 +64,24 @@ async function startWppClient() {
             }
         },
 
-        statusFind: (status) => {
-            console.log('🔎 Status do WPP:', status);
+    statusFind: async (status) => {
+        console.log('🔎 Status do WPP:', status);
 
-            if (status === 'inChat') {
-                isConnected = true;
-                isInitializing = false;
-                console.log('✅ WPPConnect conectado.');
+        if (status === 'inChat') {
+            isConnected = true;
+            isInitializing = false;
+            console.log('✅ WPPConnect conectado.');
+
+            // 🔥 NOTIFICA MICRO SERVIÇO
+            try {
+                await axios.post(`${QR_SERVICE_URL}/api/connected`);
+                console.log('📡 Microserviço notificado: conectado.');
+            } catch (err) {
+                console.error('❌ Erro ao notificar microserviço (connected):', err.message);
             }
         }
+    }
+
     });
 
     registerEvents();
@@ -123,18 +132,27 @@ function registerEvents() {
         }
     });
 
-    client.onStateChange((state) => {
+    client.onStateChange(async (state) => {
         console.log('🔄 State change:', state);
 
         if (state === 'CONFLICT') {
             console.log('⚠️ Conflito detectado. Forçando takeover...');
-            client.useHere();
+            await client.useHere();
         }
 
-        if (state === 'UNPAIRED') {
-            console.log('❌ Sessão desconectada (UNPAIRED).');
+        if (state === 'UNPAIRED' || state === 'UNPAIRED_IDLE') {
+            console.log('❌ Sessão desconectada.');
+            isConnected = false;
+
+            try {
+                await axios.post(`${QR_SERVICE_URL}/api/disconnected`);
+                console.log('📡 Microserviço notificado: desconectado.');
+            } catch (err) {
+                console.error('❌ Erro ao notificar microserviço (disconnected):', err.message);
+            }
         }
     });
+
 }
 
 
@@ -190,12 +208,37 @@ async function buildPayload(message) {
 
 
 async function resetSession() {
-    if (client) {
-        await client.close();
-        client = null;
+    console.log('♻️ Resetando sessão do bot...');
+
+    try {
+        if (client) {
+            await client.close();
+            client = null;
+        }
+
         isConnected = false;
+
+        // 🔥 Remove pasta da sessão
+        const sessionPath = path.join(SESSION_DIR, CLIENT_ID);
+        await fs.rm(sessionPath, { recursive: true, force: true });
+
+        console.log('🗑 Sessão removida com sucesso.');
+
+        // 🔥 Notifica microserviço
+        try {
+            await axios.post(`${QR_SERVICE_URL}/api/disconnected`);
+        } catch (err) {
+            console.warn('⚠️ Falha ao notificar microserviço no reset.');
+        }
+
+        // 🔥 Reinicia cliente automaticamente
+        await startWppClient();
+
+    } catch (err) {
+        console.error('❌ Erro ao resetar sessão:', err.message);
     }
 }
+
 
 module.exports = {
     startWppClient,
