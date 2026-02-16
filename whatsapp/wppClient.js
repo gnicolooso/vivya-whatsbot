@@ -123,16 +123,14 @@ function registerEvents() {
     client.onStateChange((state) => {
         console.log('🔄 State change:', state);
 
-        if (state === 'CONFLICT' || state === 'UNPAIRED') {
+        if (state === 'CONFLICT') {
+            console.log('⚠️ Conflito detectado. Forçando takeover...');
             client.useHere();
         }
 
-        // 🔥 TRATAMENTO CRÍTICO
-        if (state === 'CLOSED' || state === 'browserClose') {
-            console.warn('⚠️ Browser fechado. Reiniciando cliente...');
-            setTimeout(() => {
-                startWppClient();
-            }, 5000);
+        if (state === 'UNPAIRED') {
+            console.log('❌ Sessão desconectada (UNPAIRED). Aguardando novo QR...');
+            isConnected = false;
         }
     });
 }
