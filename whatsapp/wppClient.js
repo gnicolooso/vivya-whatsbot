@@ -80,70 +80,124 @@ async function startWppClient() {
 
 
 function registerEvents() {
+
+    // 🔔 MENSAGENS
     client.onMessage(async (message) => {
-
-        if (message.isGroupMsg) return;
-        if (message.type === 'e2e_notification') return;
-
         try {
+
+            // Filtros básicos
+            if (!message) return;
+            if (message.isGroupMsg) return;
+            if (message.type === 'e2e_notification') return;
+
+            console.log('📩 Nova mensagem recebida:', {
+                from: message.from,
+                fromMe: message.fromMe,
+                type: message.type,
+                body: message.body
+            });
+
             const payload = buildPayload(message);
+
+            // 🔥 Proteção contra payload vazio
+            if (!payload || Object.keys(payload).length === 0) {
+                console.warn('⚠️ Payload vazio. Não enviado ao n8n.');
+                return;
+            }
 
             if (message.fromMe) {
                 await axios.post(N8N_HUMAN_TAKEOVER_WEBHOOK_URL, payload);
+                console.log('🤖 Mensagem enviada para HUMAN TAKEOVER');
             } else {
                 await axios.post(N8N_WEBHOOK_URL, payload);
+                console.log('🚀 Mensagem enviada para N8N');
             }
 
         } catch (err) {
-            console.error('Erro processamento mensagem:', err.message);
+            console.error('❌ Erro processamento mensagem:', err.response?.data || err.message);
         }
     });
 
+
+    // 🔄 STATE CHANGE
     client.onStateChange((state) => {
+        console.log('🔄 State change:', state);
+
         if (state === 'CONFLICT' || state === 'UNPAIRED') {
             client.useHere();
+        }
+
+        // 🔥 TRATAMENTO CRÍTICO
+        if (state === 'CLOSED' || state === 'browserClose') {
+            console.warn('⚠️ Browser fechado. Reiniciando cliente...');
+            setTimeout(() => {
+                startWppClient();
+            }, 5000);
         }
     });
 }
 
+
 async function buildPayload(message) {
+
+    if (!message) return null;
+
     const payload = {
-        phone_number_id: message.to?.replace('@c.us', ''),
-        from: message.from?.replace('@c.us', ''),
-        from_me: message.fromMe,
-        message_id: message.id,
-        timestamp: message.timestamp,
-        message_type: message.type,
-        text: {},
-        image: {},
-        video: {},
-        audio: {},
-        document: {}
+        phone_number_id: message.to?.replace('@c.us', '') || null,
+        from: message.from?.replace('@c.us', '') || null,
+        from_me: message.fromMe || false,
+        message_id: message.id?._serialized || message.id || null,
+        timestamp: message.timestamp || Date.now(),
+        message_type: message.type || 'unknown'
     };
 
-    if (message.type === 'chat') {
-        payload.text.body = message.body;
+    // ========================
+    // TEXTO
+    // ========================
+    if (message.type === 'chat' && message.body) {
+        payload.text = {
+            body: message.body
+        };
     }
 
-    if (message.isMedia || message.type === 'image' || message.type === 'video' || message.type === 'document' || message.type === 'audio') {
-        const buffer = await client.decryptFile(message);
-        const extension = message.mimetype.split('/')[1] || 'bin';
-        const filename = `${Date.now()}-${uuidv4()}.${extension}`;
-        const filePath = path.join(MEDIA_DIR, filename);
+    // ========================
+    // MÍDIA
+    // ========================
+    const isMedia =
+        message.isMedia ||
+        ['image', 'video', 'document', 'audio'].includes(message.type);
 
-        await fs.writeFile(filePath, buffer);
+    if (isMedia) {
+        try {
 
-        const mediaUrl = `${PUBLIC_URL}/media/${filename}`;
+            const buffer = await client.decryptFile(message);
 
-        payload[message.type] = {
-            mime_type: message.mimetype,
-            url: mediaUrl,
-            filename
-        };
+            const extension =
+                message.mimetype?.split('/')[1]?.split(';')[0] || 'bin';
+
+            const filename = `${Date.now()}-${uuidv4()}.${extension}`;
+            const filePath = path.join(MEDIA_DIR, filename);
+
+            await fs.writeFile(filePath, buffer);
+
+            const mediaUrl = `${PUBLIC_URL}/media/${filename}`;
+
+            payload.media = {
+                type: message.type,
+                mime_type: message.mimetype,
+                url: mediaUrl,
+                filename
+            };
+
+        } catch (err) {
+            console.error('❌ Erro ao processar mídia:', err.message);
+            payload.media_error = true;
+        }
     }
 
     return payload;
 }
+
 
 async function resetSession() {
     if (client) {
