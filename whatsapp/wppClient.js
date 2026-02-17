@@ -123,7 +123,10 @@ function registerEvents() {
                 ? N8N_HUMAN_TAKEOVER_WEBHOOK_URL
                 : N8N_WEBHOOK_URL;
 
-            await axios.post(webhookUrl, payload, {timeout: 10000});
+            axios.post(webhookUrl, payload, { timeout: 15000 })
+                .then(() => console.log('🚀 Enviado ao n8n com sucesso'))
+                .catch(err => console.error('❌ Erro envio n8n:', err.message));
+
 
             console.log('🚀 Enviado ao n8n com sucesso');
 
