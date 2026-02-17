@@ -123,12 +123,12 @@ function registerEvents() {
                 ? N8N_HUMAN_TAKEOVER_WEBHOOK_URL
                 : N8N_WEBHOOK_URL;
 
-            await axios.post(webhookUrl, payload);
+            await axios.post(webhookUrl, payload, {timeout: 10000});
 
             console.log('🚀 Enviado ao n8n com sucesso');
 
         } catch (err) {
-            console.error('❌ Erro processamento mensagem:', err.message);
+            console.error('❌ Erro processamento mensagem:', err.response?.status || err.message);
         }
     });
 

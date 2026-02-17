@@ -11,6 +11,15 @@ const { ensureCriticalDirectoriesExist } = require('./utils/fsUtils'); // Utilit
 const { startWppClient } = require('./whatsapp/wppClient');
 const whatsappApiRoutes = require('./routes/whatsappApi'); // Rotas da API do WhatsApp
 
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('🚨 UNHANDLED REJECTION:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('🚨 UNCAUGHT EXCEPTION:', error);
+});
+
+
 /**
  * @file Arquivo principal do bot do WhatsApp.
  * Orquestra a inicialização do servidor Express, do cliente WhatsApp e dos middlewares.
